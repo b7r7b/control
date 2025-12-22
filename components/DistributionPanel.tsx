@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Stage, Committee } from '../types';
-import { Plus, Trash2, Wand2, Calculator, RotateCcw, AlertCircle, ArrowLeftRight, CheckCircle2, Eraser, Split } from 'lucide-react';
+import { Plus, Trash2, Wand2, Calculator, RotateCcw, AlertCircle, ArrowLeftRight, CheckCircle2, Eraser, Split, Hash, Users } from 'lucide-react';
 
 interface DistributionPanelProps {
   stages: Stage[];
@@ -8,9 +8,13 @@ interface DistributionPanelProps {
   onChange: (committees: Committee[]) => void;
 }
 
+type DistMode = 'capacity' | 'count';
+
 const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committees, onChange }) => {
+  const [distMode, setDistMode] = useState<DistMode>('capacity');
   const [capacityInput, setCapacityInput] = useState('20');
-  const [separateStages, setSeparateStages] = useState(true); // Default to true as per user preference
+  const [committeeCountInput, setCommitteeCountInput] = useState('10');
+  const [separateStages, setSeparateStages] = useState(false); // Default false to allow mixing as requested
 
   // Calculate ranges for visualization (Alphabetical Order)
   const ranges = useMemo(() => {
@@ -34,6 +38,8 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
     });
     return result;
   }, [committees, stages]);
+
+  const totalStudents = useMemo(() => stages.reduce((acc, s) => acc + s.total, 0), [stages]);
 
   const handleUpdateCommittee = (index: number, field: keyof Committee, value: any) => {
     const updated = [...committees];
@@ -90,14 +96,25 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
   };
 
   const autoDistribute = () => {
-    const capacity = parseInt(capacityInput);
-    if (isNaN(capacity) || capacity <= 0) {
-        alert('الرجاء إدخال سعة صحيحة للجنة (أكبر من 0).');
-        return;
+    let capacity = 0;
+
+    if (distMode === 'capacity') {
+        capacity = parseInt(capacityInput);
+        if (isNaN(capacity) || capacity <= 0) {
+            alert('الرجاء إدخال سعة صحيحة للجنة (أكبر من 0).');
+            return;
+        }
+    } else {
+        const count = parseInt(committeeCountInput);
+        if (isNaN(count) || count <= 0) {
+            alert('الرجاء إدخال عدد لجان صحيح (أكبر من 0).');
+            return;
+        }
+        capacity = Math.ceil(totalStudents / count);
     }
 
     if (committees.length > 0) {
-      if (!confirm('سيتم استبدال اللجان الحالية بتوزيع جديد كلياً. هل أنت متأكد؟')) {
+      if (!confirm(`سيتم إعادة توزيع ${totalStudents} طالب على اللجان ${distMode === 'count' ? `(السعة المحسوبة: ${capacity} طالب/لجنة)` : ''} . هل أنت متأكد؟`)) {
         return;
       }
     }
@@ -129,14 +146,17 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
             }
         }
     } else {
-        // Mode 2: Sequential Mixing (Fill committee to capacity, potentially mixing stages)
-        while (Object.values(remaining).some(c => c > 0)) {
+        // Mode 2: Sequential Mixing (Fill committee to capacity across stages)
+        // Correct logic: Keep creating committees until ALL students are distributed.
+        // In each committee, iterate stages to fill 'capacity'.
+        
+        while (Object.values(remaining).reduce((a, b) => a + b, 0) > 0) {
            let currentCommSpace = capacity;
            const counts: Record<number, number> = {};
            
-           // Fill the committee with students from stages sequentially
+           // We iterate through ALL stages to fill this single committee
            for (const stage of stages) {
-             if (currentCommSpace <= 0) break;
+             if (currentCommSpace <= 0) break; // Committee Full
              
              const r = remaining[stage.id];
              if (r > 0) {
@@ -147,7 +167,7 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
              }
            }
            
-           // Only add committee if it has students
+           // If we added anyone, push the committee
            const totalInComm = capacity - currentCommSpace;
            if (totalInComm > 0) {
              newCommittees.push({
@@ -156,6 +176,9 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
                location: '',
                counts
              });
+           } else {
+               // Safety break to prevent infinite loops if something goes wrong
+               break; 
            }
         }
     }
@@ -194,70 +217,118 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
       </div>
 
       <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+        
+        {/* Controls Header */}
+        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4">
+          
           <div className="flex items-center gap-2">
             <Calculator className="text-primary w-5 h-5" />
-            <h3 className="font-bold text-gray-700">توزيع الطلاب على اللجان</h3>
+            <div>
+                <h3 className="font-bold text-gray-700">توزيع الطلاب على اللجان</h3>
+                <p className="text-[10px] text-gray-400">الإجمالي الكلي: {totalStudents} طالب</p>
+            </div>
           </div>
           
-          <div className="flex flex-wrap gap-2 w-full md:w-auto items-center justify-end">
+          <div className="flex flex-col md:flex-row flex-wrap gap-3 w-full xl:w-auto items-start xl:items-center justify-end">
              
-             {/* Auto Distribute Controls */}
-             <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-1.5 border border-gray-200">
-                <input 
-                   type="number" 
-                   value={capacityInput}
-                   onChange={(e) => setCapacityInput(e.target.value)}
-                   className="w-12 text-center text-sm font-bold bg-white border border-gray-300 rounded p-1.5 focus:ring-1 focus:ring-primary outline-none"
-                   placeholder="20"
-                   title="سعة اللجنة"
-                />
+             {/* Mode Selector & Inputs */}
+             <div className="flex flex-col sm:flex-row items-center gap-2 bg-gray-50 rounded-xl p-2 border border-gray-200 w-full md:w-auto">
                 
-                <label className="flex items-center gap-1.5 cursor-pointer px-2 border-l border-gray-300 ml-1">
+                {/* Mode Toggle */}
+                <div className="flex bg-white rounded-lg p-1 border border-gray-200 shadow-sm">
+                    <button 
+                        onClick={() => setDistMode('capacity')}
+                        className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-colors ${distMode === 'capacity' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}
+                    >
+                        سعة اللجنة
+                    </button>
+                    <button 
+                        onClick={() => setDistMode('count')}
+                        className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-colors ${distMode === 'count' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}
+                    >
+                        عدد اللجان
+                    </button>
+                </div>
+
+                {/* Input based on Mode */}
+                <div className="flex items-center gap-2">
+                    {distMode === 'capacity' ? (
+                        <>
+                             <span className="text-[10px] font-bold text-gray-500">السعة:</span>
+                             <input 
+                                type="number" 
+                                value={capacityInput}
+                                onChange={(e) => setCapacityInput(e.target.value)}
+                                className="w-14 text-center text-sm font-bold bg-white border border-gray-300 rounded p-1.5 focus:ring-1 focus:ring-primary outline-none"
+                             />
+                        </>
+                    ) : (
+                        <>
+                             <span className="text-[10px] font-bold text-gray-500">اللجان:</span>
+                             <input 
+                                type="number" 
+                                value={committeeCountInput}
+                                onChange={(e) => setCommitteeCountInput(e.target.value)}
+                                className="w-14 text-center text-sm font-bold bg-white border border-gray-300 rounded p-1.5 focus:ring-1 focus:ring-primary outline-none"
+                             />
+                             <span className="text-[10px] text-gray-400 font-mono">
+                                ({Math.ceil(totalStudents / (parseInt(committeeCountInput) || 1))} ط/ل)
+                             </span>
+                        </>
+                    )}
+                </div>
+
+                {/* Separate Toggle */}
+                <div className="h-6 w-px bg-gray-300 mx-1 hidden sm:block"></div>
+                <label className="flex items-center gap-1.5 cursor-pointer px-1 select-none">
                     <input 
                         type="checkbox" 
                         checked={separateStages} 
                         onChange={(e) => setSeparateStages(e.target.checked)}
                         className="rounded text-secondary focus:ring-secondary w-4 h-4"
                     />
-                    <span className="text-[10px] font-bold text-gray-600 select-none">فصل المراحل</span>
+                    <span className="text-[10px] font-bold text-gray-600">فصل المراحل</span>
                 </label>
 
+                {/* Action Button */}
                 <button 
                   onClick={autoDistribute}
-                  className="px-4 py-1.5 rounded-lg bg-secondary text-white text-xs font-bold hover:bg-opacity-90 shadow-sm flex items-center gap-2 transition"
+                  className="px-4 py-1.5 rounded-lg bg-secondary text-white text-xs font-bold hover:bg-opacity-90 shadow-sm flex items-center gap-2 transition w-full sm:w-auto justify-center"
                 >
-                  <Wand2 className="w-3 h-3" /> توزيع آلي
+                  <Wand2 className="w-3 h-3" /> توزيع
                 </button>
              </div>
 
-             <div className="w-px h-8 bg-gray-200 mx-1 hidden md:block"></div>
+             {/* Manual Actions */}
+             <div className="flex gap-2 w-full md:w-auto justify-end">
+                <button 
+                  onClick={addCommittee}
+                  className="px-3 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs font-bold flex items-center gap-1 transition"
+                  title="إضافة لجنة فارغة"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+                
+                <button 
+                  onClick={resetCountsOnly}
+                  className="px-3 py-2 rounded-xl border border-orange-200 text-orange-600 hover:bg-orange-50 text-xs font-bold flex items-center gap-1 transition"
+                  title="تصفير أعداد الطلاب فقط"
+                >
+                  <Eraser className="w-4 h-4" />
+                </button>
 
-            <button 
-              onClick={addCommittee}
-              className="px-3 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs font-bold flex items-center gap-1 transition"
-            >
-              <Plus className="w-3 h-3" /> إضافة لجنة
-            </button>
-            
-            <button 
-              onClick={resetCountsOnly}
-              className="px-3 py-2 rounded-xl border border-orange-200 text-orange-600 hover:bg-orange-50 text-xs font-bold flex items-center gap-1 transition"
-              title="تصفير أعداد الطلاب فقط (الإبقاء على اللجان)"
-            >
-              <Eraser className="w-3 h-3" /> تصفير الأعداد
-            </button>
-
-            <button 
-              onClick={removeAllCommittees}
-              className="px-3 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold flex items-center gap-1 transition"
-              title="حذف جميع اللجان"
-            >
-              <Trash2 className="w-3 h-3" /> حذف اللجان
-            </button>
+                <button 
+                  onClick={removeAllCommittees}
+                  className="px-3 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold flex items-center gap-1 transition"
+                  title="حذف جميع اللجان"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+             </div>
           </div>
         </div>
 
+        {/* Table */}
         <div className="overflow-x-auto rounded-xl border border-gray-200">
           <table className="w-full text-sm text-center">
             <thead className="bg-gray-50 text-gray-500 text-xs uppercase font-bold">

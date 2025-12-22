@@ -55,8 +55,9 @@ const App: React.FC = () => {
     // Force sort alphabetically on save to ensure data integrity
     const sortedStudents = [...students].sort((a, b) => a.name.localeCompare(b.name, 'ar'));
 
+    // Fix: Generate a truly unique ID even if called in a loop
     const newStage: Stage = {
-      id: Date.now(),
+      id: Date.now() + Math.floor(Math.random() * 10000),
       name,
       prefix,
       students: sortedStudents,

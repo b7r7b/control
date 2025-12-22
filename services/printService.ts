@@ -3,17 +3,17 @@ import { AppData, PrintSettings, DynamicReportConfig } from '../types';
 // --- Shared Components ---
 
 const getHeaderHTML = (school: any, settings: PrintSettings) => `
-  <div style="display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px; direction: rtl;">
-    <div style="text-align: right; width: 30%; font-size: 11px; line-height: 1.4; font-weight: 800; color: #000;">
+  <div style="display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 10px; direction: rtl;">
+    <div style="text-align: right; width: 30%; font-size: 10px; line-height: 1.3; font-weight: 800; color: #000;">
       <div>المملكة العربية السعودية</div>
       <div>وزارة التعليم</div>
       <div>${settings.adminName}</div>
     </div>
     <div style="text-align: center; width: 40%; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
-      <img src="${settings.logoUrl}" style="height: 60px; object-fit: contain; margin-bottom: 5px; filter: grayscale(100%) contrast(120%);" alt="Logo">
-      <div style="font-size: 14px; font-weight: 900; text-decoration: underline; margin-top: 2px;">${settings.schoolName || school.name}</div>
+      <img src="${settings.logoUrl}" style="height: 50px; object-fit: contain; margin-bottom: 3px; filter: grayscale(100%) contrast(120%);" alt="Logo">
+      <div style="font-size: 13px; font-weight: 900; text-decoration: underline; margin-top: 2px;">${settings.schoolName || school.name}</div>
     </div>
-    <div style="text-align: left; width: 30%; font-size: 11px; line-height: 1.4; font-weight: 800; color: #000; padding-left: 5px;">
+    <div style="text-align: left; width: 30%; font-size: 10px; line-height: 1.3; font-weight: 800; color: #000; padding-left: 5px;">
        <div>${school.term}</div>
        <div>${school.year}</div>
     </div>
@@ -59,7 +59,7 @@ const openPrintWindow = (content: string, orientation: 'portrait' | 'landscape' 
             padding: 0; 
             background: #fff; 
             color: #000;
-            font-size: 11px;
+            font-size: 10px; /* Reduced from 11px */
             font-weight: 700;
           }
           @media print {
@@ -73,18 +73,18 @@ const openPrintWindow = (content: string, orientation: 'portrait' | 'landscape' 
           table { width: 100%; border-collapse: collapse; margin-top: 5px; border: 2px solid #000; }
           th, td { 
             border: 1px solid #000; 
-            padding: 3px 2px; 
+            padding: 2px; /* Reduced from 3px 2px */
             text-align: center; 
-            font-size: 11px; 
+            font-size: 10px; /* Reduced from 11px */
             font-weight: 700; 
             color: #000; 
           }
           th { background-color: #f0f0f0 !important; font-weight: 900; border-bottom: 2px solid #000; }
           
           /* Utility Classes */
-          h1 { font-size: 18px; font-weight: 900; margin: 5px 0; color: #000; }
-          h2 { font-size: 15px; font-weight: 900; margin: 5px 0; color: #000; }
-          h3 { font-size: 13px; font-weight: 800; margin: 5px 0; color: #000; }
+          h1 { font-size: 16px; font-weight: 900; margin: 5px 0; color: #000; } /* Reduced from 18px */
+          h2 { font-size: 14px; font-weight: 900; margin: 4px 0; color: #000; } /* Reduced from 15px */
+          h3 { font-size: 12px; font-weight: 800; margin: 3px 0; color: #000; } /* Reduced from 13px */
           
           .grid-container { width: 100%; }
           .form-box { border: 2px solid #000; padding: 10px; border-radius: 4px; margin-bottom: 15px; }
@@ -92,7 +92,7 @@ const openPrintWindow = (content: string, orientation: 'portrait' | 'landscape' 
           /* Grid for counts */
           .grid-row { display: flex; border-bottom: 1px solid #000; }
           .grid-row:last-child { border-bottom: none; }
-          .grid-cell { flex: 1; border-left: 1px solid #000; padding: 3px; text-align: center; }
+          .grid-cell { flex: 1; border-left: 1px solid #000; padding: 2px; text-align: center; }
           .grid-cell:last-child { border-left: none; }
 
           /* --- STICKER SPECIFIC STYLES (Avery L7160 / 3x7) --- */
@@ -211,8 +211,8 @@ export const printStudentCountsReport = (data: AppData, settings: PrintSettings,
           <div class="grid-cell">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                ${fClass.visible ? `<span style="font-size:10px">${item.stage}</span>` : ''}
-               ${fComm.visible ? `<span style="font-size:12px; font-weight:900;">(${item.committee})</span>` : ''}
-               ${fCount.visible ? `<span style="font-size:12px; font-weight:900;">${item.count}</span>` : ''}
+               ${fComm.visible ? `<span style="font-size:11px; font-weight:900;">(${item.committee})</span>` : ''}
+               ${fCount.visible ? `<span style="font-size:11px; font-weight:900;">${item.count}</span>` : ''}
             </div>
           </div>`;
       } else {
@@ -251,7 +251,7 @@ export const printCommitteeData = (data: AppData, settings: PrintSettings) => {
         
         rows += `
           <tr>
-            <td style="font-weight:900; font-size:14px;">${c.name}</td>
+            <td style="font-weight:900; font-size:12px;">${c.name}</td>
             <td>${c.location}</td>
             <td>${stagesInComm}</td>
             <td style="font-weight:900;">${total}</td>
@@ -320,14 +320,14 @@ export const printAttendance = (data: AppData, settings: PrintSettings) => {
                 const student = stage.students[idx] || { name: '...', studentId: '-' };
                 const seatNumber = stage.prefix + String(idx + 1).padStart(3, '0');
                 
-                rows += `<tr>${settings.showColSequence ? `<td style="width:30px;">${sn++}</td>` : ''}${settings.showColSeatId ? `<td style="font-weight: 900; font-size: 13px;">${seatNumber}</td>` : ''}${settings.showColName ? `<td style="text-align: right; padding-right: 10px; font-weight: 800;">${student.name}</td>` : ''}${settings.showColStage ? `<td>${stage.name}</td>` : ''}${settings.showColPresence ? `<td></td>` : ''}${settings.showColSignature ? `<td></td>` : ''}</tr>`;
+                rows += `<tr>${settings.showColSequence ? `<td style="width:30px;">${sn++}</td>` : ''}${settings.showColSeatId ? `<td style="font-weight: 900; font-size: 12px;">${seatNumber}</td>` : ''}${settings.showColName ? `<td style="text-align: right; padding-right: 10px; font-weight: 800;">${student.name}</td>` : ''}${settings.showColStage ? `<td>${stage.name}</td>` : ''}${settings.showColPresence ? `<td></td>` : ''}${settings.showColSignature ? `<td></td>` : ''}</tr>`;
             }
         }
     });
 
     if (!hasStudents) return;
 
-    const pageContent = `<div>${getHeaderHTML(data.school, settings)}<div style="text-align: center; margin: 10px 0 15px 0; border-bottom: 1px solid #eee; padding-bottom: 5px;"><h2 style="margin: 0; color: #208caa; font-size: 20px;">${settings.attendanceTitle}</h2><div style="display: flex; justify-content: center; gap: 20px; margin-top: 5px; font-size: 16px; font-weight: 800;"><span>اللجنة: ${committee.name}</span><span>|</span><span>المقر: ${committee.location || '___'}</span></div></div><table><thead><tr>${settings.showColSequence ? `<th style="width: 30px;">${settings.colSequence}</th>` : ''}${settings.showColSeatId ? `<th style="width: 80px;">${settings.colSeatId}</th>` : ''}${settings.showColName ? `<th>${settings.colName}</th>` : ''}${settings.showColStage ? `<th style="width: 100px;">${settings.colStage}</th>` : ''}${settings.showColPresence ? `<th style="width: 60px;">${settings.colPresence}</th>` : ''}${settings.showColSignature ? `<th style="width: 100px;">${settings.colSignature}</th>` : ''}</tr></thead><tbody>${rows}</tbody></table><div style="margin-top: 40px; display: flex; justify-content: space-between; font-weight: 800; font-size: 12px; text-align: center;"><div style="width: 30%;"><div>الملاحظ الأول</div><div style="margin-top: 20px;">..........................</div></div><div style="width: 30%;"><div>الملاحظ الثاني</div><div style="margin-top: 20px;">..........................</div></div><div style="width: 30%;"><div>مدير المدرسة</div><div style="margin-top: 20px;">..........................</div></div></div></div>`;
+    const pageContent = `<div>${getHeaderHTML(data.school, settings)}<div style="text-align: center; margin: 10px 0 15px 0; border-bottom: 1px solid #eee; padding-bottom: 5px;"><h2 style="margin: 0; color: #208caa; font-size: 18px;">${settings.attendanceTitle}</h2><div style="display: flex; justify-content: center; gap: 20px; margin-top: 5px; font-size: 14px; font-weight: 800;"><span>اللجنة: ${committee.name}</span><span>|</span><span>المقر: ${committee.location || '___'}</span></div></div><table><thead><tr>${settings.showColSequence ? `<th style="width: 30px;">${settings.colSequence}</th>` : ''}${settings.showColSeatId ? `<th style="width: 80px;">${settings.colSeatId}</th>` : ''}${settings.showColName ? `<th>${settings.colName}</th>` : ''}${settings.showColStage ? `<th style="width: 100px;">${settings.colStage}</th>` : ''}${settings.showColPresence ? `<th style="width: 60px;">${settings.colPresence}</th>` : ''}${settings.showColSignature ? `<th style="width: 100px;">${settings.colSignature}</th>` : ''}</tr></thead><tbody>${rows}</tbody></table><div style="margin-top: 40px; display: flex; justify-content: space-between; font-weight: 800; font-size: 11px; text-align: center;"><div style="width: 30%;"><div>الملاحظ الأول</div><div style="margin-top: 20px;">..........................</div></div><div style="width: 30%;"><div>الملاحظ الثاني</div><div style="margin-top: 20px;">..........................</div></div><div style="width: 30%;"><div>مدير المدرسة</div><div style="margin-top: 20px;">..........................</div></div></div></div>`;
     html += `<div class="page-break">${pageContent}</div>`;
   });
   openPrintWindow(html, 'portrait');
@@ -441,7 +441,7 @@ export const printInvigilatorAttendance = (
   items.forEach((c: any) => {
     const teacherName = assignments && c.name ? (assignments[c.name] || '') : '';
     rows += `
-      <tr style="height: 30px;">
+      <tr style="height: 25px;"> <!-- Reduced row height -->
         ${fCommNo.visible ? `<td>${c.name || ''}</td>` : ''}
         ${fCommLoc.visible ? `<td>${c.location || ''}</td>` : ''}
         ${fSubject.visible ? `<td></td>` : ''}
@@ -496,7 +496,7 @@ export const printAnswerPaperReceipt = (data: AppData, settings: PrintSettings, 
     data.committees.forEach((c: any, index: number) => {
       const totalStudents = data.stages.reduce((acc, stage) => acc + (c.counts[stage.id] || 0), 0);
       rows += `
-        <tr style="height: 28px;">
+        <tr style="height: 24px;">
           <td>${index + 1}</td>
           ${colComm.visible ? `<td>${c.name || ''}</td>` : ''}
           ${colApplicants.visible ? `<td>${totalStudents || ''}</td>` : ''}
@@ -702,7 +702,7 @@ export const printExamPaperTracking = (data: AppData, settings: PrintSettings, c
     let rows = '';
     for(let i=0; i<15; i++) {
         rows += `
-          <tr style="height: 30px;">
+          <tr style="height: 25px;">
              ${lblTeacher.visible ? `<td></td>` : ''}
              ${lblSubject.visible ? `<td></td>` : ''}
              ${lblGrade.visible ? `<td></td>` : ''}

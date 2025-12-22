@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AppData, ExamSchedule, DaySchedule, PeriodAssignment, Teacher } from '../types';
-import { Users, Wand2, Calendar, RotateCcw, ChevronDown, ChevronUp, MessageCircle, UserPlus, Upload, Trash2, X, ClipboardPaste, Printer, Share2, Send, CheckCircle, ExternalLink, Play, Square } from 'lucide-react';
+import { Users, Wand2, Calendar, RotateCcw, ChevronDown, ChevronUp, MessageCircle, UserPlus, Upload, Trash2, X, ClipboardPaste, Printer, Share2, Send, CheckCircle, ExternalLink, Play, Square, Layers, Clock } from 'lucide-react';
 import { readExcelFile, getSheetData } from '../services/excelService';
 
 interface Props {
@@ -12,7 +12,9 @@ interface Props {
 const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateTeachers }) => {
   // Distribution Logic State
   const [numDays, setNumDays] = useState(5);
-  const [numPeriods, setNumPeriods] = useState(1);
+  // Changed from single number to array
+  const [periodsPerDay, setPeriodsPerDay] = useState<number[]>([1, 1, 1, 1, 1]); 
+  
   const [teachersPerComm, setTeachersPerComm] = useState(1);
   const [schedule, setSchedule] = useState<ExamSchedule | null>(data.schedule || null);
   const [activeDayIdx, setActiveDayIdx] = useState(0);
@@ -35,6 +37,31 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
   const [isAutoSending, setIsAutoSending] = useState(false);
   const [autoSendList, setAutoSendList] = useState<Teacher[]>([]);
   const [autoSendIndex, setAutoSendIndex] = useState(0);
+
+  // --- Effects ---
+  
+  // Sync periodsPerDay array size with numDays
+  useEffect(() => {
+    setPeriodsPerDay(prev => {
+        if (prev.length === numDays) return prev;
+        if (prev.length > numDays) return prev.slice(0, numDays);
+        // Fill new days with 1 period by default, or copy last day's val
+        const newArr = [...prev];
+        while (newArr.length < numDays) {
+            newArr.push(1);
+        }
+        return newArr;
+    });
+  }, [numDays]);
+
+  // Load initial periods from existing schedule if available
+  useEffect(() => {
+      if (data.schedule && data.schedule.days.length > 0) {
+          setNumDays(data.schedule.days.length);
+          setPeriodsPerDay(data.schedule.days.map(d => d.periods.length));
+          setTeachersPerComm(data.schedule.teachersPerCommittee || 1);
+      }
+  }, []);
 
   // Stats calculation
   const stats = useMemo(() => {
@@ -227,6 +254,16 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
       }
   };
 
+  const togglePeriodCount = (dayIndex: number) => {
+      setPeriodsPerDay(prev => {
+          const newArr = [...prev];
+          let val = newArr[dayIndex] + 1;
+          if (val > 3) val = 1;
+          newArr[dayIndex] = val;
+          return newArr;
+      });
+  };
+
   // --- Schedule Logic ---
 
   const generateSchedule = () => {
@@ -238,10 +275,13 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
       alert('لا يوجد معلمين للتوزيع');
       return;
     }
-
+    
+    // Check max needs across all days (worst case)
+    const maxPeriods = Math.max(...periodsPerDay);
     const neededPerSlot = data.committees.length * teachersPerComm;
+    
     if (data.teachers.length < neededPerSlot) {
-      if (!confirm(`عدد المعلمين (${data.teachers.length}) أقل من المطلوب لكل فترة (${neededPerSlot}). سيتم ترك بعض اللجان فارغة. هل تريد الاستمرار؟`)) {
+      if (!confirm(`عدد المعلمين (${data.teachers.length}) أقل من المطلوب للفترة الواحدة (${neededPerSlot}). سيتم ترك بعض اللجان فارغة. هل تريد الاستمرار؟`)) {
         return;
       }
     }
@@ -253,9 +293,11 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
 
     for (let d = 0; d < numDays; d++) {
       const periods: PeriodAssignment[] = [];
+      const currentDayPeriods = periodsPerDay[d] || 1; // Use specific period count for this day
       
-      for (let p = 0; p < numPeriods; p++) {
+      for (let p = 0; p < currentDayPeriods; p++) {
         const sortedTeachers = [...data.teachers].sort((a, b) => {
+          // Sort primarily by usage, secondarily randomize to avoid stuck patterns
           const usageDiff = teacherUsage[a.name] - teacherUsage[b.name];
           if (usageDiff !== 0) return usageDiff;
           return Math.random() - 0.5;
@@ -685,58 +727,80 @@ ${tasks.join('\n')}
       </div>
 
       {/* Settings Bar for Schedule */}
-      <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-wrap gap-6 items-end">
-        <div>
-           <label className="block text-xs font-bold text-gray-500 mb-1">عدد الأيام</label>
-           <input type="number" min="1" max="20" value={numDays} onChange={(e) => setNumDays(Number(e.target.value))} className="w-20 rounded-lg border-gray-300 bg-gray-50 p-2 text-sm font-bold text-center" />
+      <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-6 md:items-end">
+        
+        {/* Basic Settings */}
+        <div className="flex gap-4 items-end">
+            <div>
+               <label className="block text-xs font-bold text-gray-500 mb-1">عدد الأيام</label>
+               <input type="number" min="1" max="20" value={numDays} onChange={(e) => setNumDays(Number(e.target.value))} className="w-20 rounded-lg border-gray-300 bg-gray-50 p-2 text-sm font-bold text-center" />
+            </div>
+            
+            <div>
+               <label className="block text-xs font-bold text-gray-500 mb-1">ملاحظين بكل لجنة</label>
+               <select value={teachersPerComm} onChange={(e) => setTeachersPerComm(Number(e.target.value))} className="w-24 rounded-lg border-gray-300 bg-gray-50 p-2 text-sm font-bold">
+                 <option value="1">1 ملاحظ</option>
+                 <option value="2">2 ملاحظين</option>
+               </select>
+            </div>
         </div>
-        <div>
-           <label className="block text-xs font-bold text-gray-500 mb-1">الفترات يومياً</label>
-           <select value={numPeriods} onChange={(e) => setNumPeriods(Number(e.target.value))} className="w-24 rounded-lg border-gray-300 bg-gray-50 p-2 text-sm font-bold">
-             <option value="1">فترة واحدة</option>
-             <option value="2">فترتين</option>
-             <option value="3">3 فترات</option>
-           </select>
-        </div>
-        <div>
-           <label className="block text-xs font-bold text-gray-500 mb-1">ملاحظين بكل لجنة</label>
-           <select value={teachersPerComm} onChange={(e) => setTeachersPerComm(Number(e.target.value))} className="w-24 rounded-lg border-gray-300 bg-gray-50 p-2 text-sm font-bold">
-             <option value="1">1 ملاحظ</option>
-             <option value="2">2 ملاحظين</option>
-           </select>
+
+        {/* Dynamic Period Configuration */}
+        <div className="flex-1 bg-blue-50/50 p-2 rounded-xl border border-blue-100">
+             <label className="block text-xs font-bold text-blue-800 mb-1 flex items-center gap-1">
+                <Clock className="w-3 h-3" /> تخصيص الفترات لكل يوم (اضغط لتغيير العدد)
+             </label>
+             <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
+                {periodsPerDay.map((count, idx) => (
+                    <button 
+                        key={idx} 
+                        onClick={() => togglePeriodCount(idx)}
+                        className={`
+                            flex-shrink-0 flex flex-col items-center justify-center w-12 h-10 rounded-lg border text-xs transition-all
+                            ${count === 1 ? 'bg-white border-gray-200 text-gray-600' : ''}
+                            ${count === 2 ? 'bg-blue-100 border-blue-300 text-blue-700 font-bold' : ''}
+                            ${count === 3 ? 'bg-purple-100 border-purple-300 text-purple-700 font-bold' : ''}
+                        `}
+                        title={`اليوم ${idx+1}: ${count} فترات`}
+                    >
+                        <span className="text-[9px] opacity-70">يوم {idx + 1}</span>
+                        <span className="font-black text-sm leading-none">{count}</span>
+                    </button>
+                ))}
+             </div>
         </div>
         
-        <div className="flex-1 flex gap-2 justify-end">
+        <div className="flex flex-wrap gap-2 justify-end">
              {schedule && (
                  <>
                     <button 
                         onClick={() => setShowWhatsAppModal(true)}
-                        className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold shadow-md shadow-green-100 hover:bg-green-700 transition flex items-center gap-2"
+                        className="bg-green-600 text-white px-3 py-2 rounded-xl font-bold shadow-md shadow-green-100 hover:bg-green-700 transition flex items-center gap-2 text-xs"
                         title="إرسال الجداول عبر واتساب"
                     >
-                        <Share2 className="w-4 h-4" /> إرسال للجميع
+                        <Share2 className="w-4 h-4" /> واتساب
                     </button>
                     <button 
                         onClick={() => handlePrintSchedule(activeDayIdx)}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold shadow-md shadow-blue-100 hover:bg-blue-700 transition flex items-center gap-2"
+                        className="bg-blue-600 text-white px-3 py-2 rounded-xl font-bold shadow-md shadow-blue-100 hover:bg-blue-700 transition flex items-center gap-2 text-xs"
                         title="طباعة جدول اليوم الحالي للتوقيع"
                     >
-                        <Printer className="w-4 h-4" /> طباعة اليوم
+                        <Printer className="w-4 h-4" /> يومي
                     </button>
                     <button 
                         onClick={() => handlePrintSchedule(null)}
-                        className="bg-gray-700 text-white px-4 py-2 rounded-xl font-bold shadow-md hover:bg-gray-800 transition flex items-center gap-2"
+                        className="bg-gray-700 text-white px-3 py-2 rounded-xl font-bold shadow-md hover:bg-gray-800 transition flex items-center gap-2 text-xs"
                         title="طباعة كامل الجدول"
                     >
-                        <Printer className="w-4 h-4" /> طباعة الكل
+                        <Printer className="w-4 h-4" /> كامل
                     </button>
                  </>
              )}
             <button 
                onClick={generateSchedule}
-               className="bg-secondary text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-purple-200 hover:bg-opacity-90 transition flex items-center gap-2"
+               className="bg-secondary text-white px-5 py-2 rounded-xl font-bold shadow-lg shadow-purple-200 hover:bg-opacity-90 transition flex items-center gap-2 text-xs"
             >
-               <Wand2 className="w-4 h-4" /> {schedule ? 'إعادة التوزيع' : 'بدء التوزيع'}
+               <Wand2 className="w-4 h-4" /> {schedule ? 'إعادة توزيع' : 'بدء التوزيع'}
             </button>
         </div>
       </div>
@@ -759,6 +823,7 @@ ${tasks.join('\n')}
                                 }`}
                             >
                                 اليوم {idx + 1}
+                                <span className="mr-2 text-[10px] opacity-70 bg-black/20 px-1.5 rounded-full">{d.periods.length} فترات</span>
                             </button>
                         ))}
                     </div>

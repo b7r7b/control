@@ -349,78 +349,149 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
     let htmlContent = '';
 
     daysToPrint.forEach((day, dIdx) => {
-        const actualDayIndex = specificDayIdx !== null ? specificDayIdx : dIdx;
-        let dayHtml = `
-            <div style="page-break-after: always; direction: rtl; font-family: 'Tajawal', sans-serif;">
-                <h2 style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px;">جدول توزيع الملاحظين - اليوم ${actualDayIndex + 1}</h2>
-                <table style="width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; text-align: center;">
-                    <thead>
-                        <tr style="background-color: #f0f0f0;">
-                            <th style="border: 1px solid #000; padding: 5px;">اللجنة</th>
-                            <th style="border: 1px solid #000; padding: 5px;">المقر</th>
-                            ${day.periods.map((_, i) => `
-                                <th style="border: 1px solid #000; padding: 5px;">الفترة ${i+1}</th>
-                                <th style="border: 1px solid #000; padding: 5px; width: 60px;">التوقيع</th>
-                            `).join('')}
-                        </tr>
-                    </thead>
-                    <tbody>
-        `;
-
-        // Print Main Committees
-        data.committees.forEach((comm, cIdx) => {
-            dayHtml += `<tr>
-                <td style="border: 1px solid #000; padding: 5px; font-weight: bold;">${comm.name}</td>
-                <td style="border: 1px solid #000; padding: 5px;">${comm.location}</td>`;
+        // Iterate over periods to create separate pages/tables per period
+        day.periods.forEach((period, pIdx) => {
+            const actualDayIndex = specificDayIdx !== null ? specificDayIdx : dIdx;
             
-            day.periods.forEach(period => {
+            // Header HTML
+            const headerHtml = `
+              <div style="display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 5px; margin-bottom: 10px; direction: rtl;">
+                <div style="text-align: right; width: 30%; font-size: 10px; line-height: 1.3; font-weight: 800; color: #000;">
+                  <div>المملكة العربية السعودية</div>
+                  <div>وزارة التعليم</div>
+                  <div>إدارة التعليم</div>
+                </div>
+                <div style="text-align: center; width: 40%; display: flex; flex-direction: column; align-items: center;">
+                  <img src="https://salogos.org/wp-content/uploads/2021/11/UntiTtled-1.png" style="height: 50px; object-fit: contain; margin-bottom: 3px; filter: grayscale(100%) contrast(120%);" alt="Logo">
+                  <div style="font-size: 13px; font-weight: 900; text-decoration: underline; margin-top: 2px;">${data.school.name}</div>
+                </div>
+                <div style="text-align: left; width: 30%; font-size: 10px; line-height: 1.3; font-weight: 800; color: #000;">
+                   <div>${data.school.term}</div>
+                   <div>${data.school.year}</div>
+                </div>
+              </div>
+            `;
+
+            let pageHtml = `
+                <div style="page-break-after: always; direction: rtl; font-family: 'Tajawal', sans-serif;">
+                    ${headerHtml}
+                    <h2 style="text-align: center; margin-bottom: 10px; font-weight: 900; font-size: 16px;">توزيع الملاحظين على اللجان</h2>
+                    
+                    <!-- Day/Date/Period Header Table -->
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 5px; border: 2px solid #000; text-align: center; font-size: 12px;">
+                        <tr style="background-color: #eee;">
+                            <td style="border: 1px solid #000; padding: 5px; font-weight: 900; width: 10%;">اليوم</td>
+                            <td style="border: 1px solid #000; padding: 5px; width: 23%;">${actualDayIndex + 1}</td>
+                            <td style="border: 1px solid #000; padding: 5px; font-weight: 900; width: 10%;">التاريخ</td>
+                            <td style="border: 1px solid #000; padding: 5px; width: 23%;">....................</td>
+                            <td style="border: 1px solid #000; padding: 5px; font-weight: 900; width: 10%;">الفترة</td>
+                            <td style="border: 1px solid #000; padding: 5px; width: 23%;">
+                               ${pIdx === 0 ? 'الأولى' : pIdx === 1 ? 'الثانية' : 'الثالثة'}
+                            </td>
+                        </tr>
+                    </table>
+
+                    <!-- Main Data Table -->
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 11px; text-align: center; border: 2px solid #000;">
+                        <thead>
+                            <tr style="background-color: #f0f0f0;">
+                                <th style="border: 1px solid #000; padding: 5px; width: 50px;">رقم اللجنة</th>
+                                <th style="border: 1px solid #000; padding: 5px;">مقر اللجنة</th>
+                                <th style="border: 1px solid #000; padding: 5px; width: 15%;">المادة</th>
+                                <th style="border: 1px solid #000; padding: 5px; width: 10%;">زمن الاختبار</th>
+                                <th style="border: 1px solid #000; padding: 5px; width: 25%;">اسم الملاحظ</th>
+                                <th style="border: 1px solid #000; padding: 5px; width: 10%;">التوقيع</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            // 1. Print Committees
+            data.committees.forEach((comm, cIdx) => {
                 const teachers = [];
                 for(let k=0; k<schedule.teachersPerCommittee; k++) {
                     const t = period.main[(cIdx * schedule.teachersPerCommittee) + k];
                     if (t) teachers.push(t);
                 }
-                dayHtml += `
-                    <td style="border: 1px solid #000; padding: 5px;">${teachers.join(' - ')}</td>
-                    <td style="border: 1px solid #000; padding: 5px;"></td>
+                const teacherCell = teachers.length > 0 ? teachers.join(' - ') : '';
+
+                pageHtml += `
+                    <tr style="height: 30px;">
+                        <td style="border: 1px solid #000; padding: 2px; font-weight: bold;">${comm.name}</td>
+                        <td style="border: 1px solid #000; padding: 2px;">${comm.location}</td>
+                        <td style="border: 1px solid #000; padding: 2px;"></td> <!-- Subject Empty -->
+                        <td style="border: 1px solid #000; padding: 2px;"></td> <!-- Time Empty -->
+                        <td style="border: 1px solid #000; padding: 2px; font-weight: bold;">${teacherCell}</td>
+                        <td style="border: 1px solid #000; padding: 2px;"></td> <!-- Sign Empty -->
+                    </tr>
                 `;
             });
-            dayHtml += `</tr>`;
-        });
 
-        // Calculate maximum reserves depth for this day to create enough rows
-        const maxReserves = day.periods.reduce((max, p) => Math.max(max, p.reserves.length), 0);
-        
-        // Print Reserves (Separate Rows)
-        if (maxReserves > 0) {
-             for (let r = 0; r < maxReserves; r++) {
-                 dayHtml += `<tr style="background-color: #fffde7;">
-                    <td style="border: 1px solid #000; padding: 5px; font-weight: bold;">الاحتياط ${r + 1}</td>
-                    <td style="border: 1px solid #000; padding: 5px;">-</td>
-                 `;
-                 
-                 day.periods.forEach(period => {
-                     const teacher = period.reserves[r] || '';
-                     dayHtml += `
-                        <td style="border: 1px solid #000; padding: 5px; color: ${teacher ? 'black' : '#ccc'}">${teacher}</td>
-                        <td style="border: 1px solid #000; padding: 5px;"></td>
+            // 2. Print Reserves
+            if (period.reserves.length > 0) {
+                 period.reserves.forEach((res, rIdx) => {
+                     pageHtml += `
+                        <tr style="height: 30px; background-color: #fffde7;">
+                            <td style="border: 1px solid #000; padding: 2px; font-weight: bold;">احتياط</td>
+                            <td style="border: 1px solid #000; padding: 2px;">-</td>
+                            <td style="border: 1px solid #000; padding: 2px;"></td>
+                            <td style="border: 1px solid #000; padding: 2px;"></td>
+                            <td style="border: 1px solid #000; padding: 2px;">${res}</td>
+                            <td style="border: 1px solid #000; padding: 2px;"></td>
+                        </tr>
                      `;
                  });
-                 dayHtml += `</tr>`;
-             }
-        }
+            } else {
+                 // Add empty rows if no reserves just to fill space if needed or show at least one empty
+                 pageHtml += `
+                    <tr style="height: 30px; background-color: #fffde7;">
+                        <td style="border: 1px solid #000; padding: 2px; font-weight: bold;">احتياط</td>
+                        <td colspan="5" style="border: 1px solid #000; padding: 2px;"></td>
+                    </tr>
+                 `;
+            }
 
-        dayHtml += `</tbody></table>
-        <div style="margin-top: 30px; display: flex; justify-content: space-between; font-weight: bold;">
-            <div>مسؤول الجدول: ....................</div>
-            <div>مدير المدرسة: ....................</div>
-        </div>
-        </div>`;
-        htmlContent += dayHtml;
+            pageHtml += `
+                        </tbody>
+                    </table>
+                    
+                    <div style="margin-top: 30px; display: flex; justify-content: space-between; font-weight: 800; font-size: 12px; padding: 0 20px;">
+                        <div style="text-align: center;">
+                            <div>مسؤول الجدول</div>
+                            <div style="margin-top: 25px;">..........................</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div>وكيل الشؤون التعليمية</div>
+                            <div style="margin-top: 25px;">..........................</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div>مدير المدرسة</div>
+                            <div style="margin-top: 25px;">..........................</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            htmlContent += pageHtml;
+        });
     });
 
     const w = window.open('', '_blank');
     if (w) {
-        w.document.write(`<html><head><title>جدول التوزيع</title><link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700&display=swap" rel="stylesheet"></head><body>${htmlContent}</body></html>`);
+        w.document.write(`
+            <html>
+                <head>
+                    <title>جدول التوزيع</title>
+                    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;800;900&display=swap" rel="stylesheet">
+                    <style>
+                        body { margin: 0; padding: 0; background-color: #fff; }
+                        @media print {
+                            @page { size: A4; margin: 10mm; }
+                        }
+                    </style>
+                </head>
+                <body>${htmlContent}</body>
+            </html>
+        `);
         w.document.close();
         setTimeout(() => w.print(), 500);
     }

@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { AppData, Stage, Committee, AppStep, Student, ExamSchedule } from './types';
+import { AppData, Stage, Committee, AppStep, Student, ExamSchedule, Teacher } from './types';
 import ImportWizard from './components/ImportWizard';
 import DistributionPanel from './components/DistributionPanel';
 import InvigilatorDistributionPanel from './components/InvigilatorDistributionPanel';
 import PrintCenter from './components/PrintCenter';
-import { readExcelFile, getSheetData } from './services/excelService';
-import { Trash2, Printer, Settings2, Users, Database, Upload, UserPlus, X, ClipboardList } from 'lucide-react';
+import { Trash2, Printer, Settings2, Users, Database, ClipboardList, Edit, PlusCircle, AlertTriangle } from 'lucide-react';
 
 const STORAGE_KEY = 'ExamSystemData_v2';
 
@@ -21,9 +20,6 @@ const App: React.FC = () => {
   const [step, setStep] = useState<AppStep>(AppStep.DATA);
   const [showImport, setShowImport] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
-  
-  // Teacher Input State
-  const [newTeacherName, setNewTeacherName] = useState('');
 
   // Load Data
   useEffect(() => {
@@ -31,8 +27,11 @@ const App: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Ensure teachers array exists for backward compatibility
-        if (!parsed.teachers) parsed.teachers = [];
+        if (!parsed.teachers) {
+            parsed.teachers = [];
+        } else if (parsed.teachers.length > 0 && typeof parsed.teachers[0] === 'string') {
+            parsed.teachers = parsed.teachers.map((name: string) => ({ name, phone: '' }));
+        }
         setData(parsed);
       } catch (e) {
         console.error('Failed to load data', e);
@@ -53,16 +52,18 @@ const App: React.FC = () => {
   };
 
   const handleSaveStage = (name: string, prefix: string, students: Student[]) => {
+    // Force sort alphabetically on save to ensure data integrity
+    const sortedStudents = [...students].sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+
     const newStage: Stage = {
       id: Date.now(),
       name,
       prefix,
-      students,
-      total: students.length
+      students: sortedStudents,
+      total: sortedStudents.length
     };
 
     setData(prev => {
-      // Initialize counts for this new stage in existing committees
       const updatedCommittees = prev.committees.map(c => ({
         ...c,
         counts: { ...c.counts, [newStage.id]: 0 }
@@ -75,7 +76,6 @@ const App: React.FC = () => {
     });
     setShowImport(false);
     
-    // Move to distribute step if it's the first stage
     if (data.stages.length === 0) setStep(AppStep.DISTRIBUTE);
   };
 
@@ -88,7 +88,7 @@ const App: React.FC = () => {
   };
 
   const removeStage = (id: number) => {
-    if (confirm('حذف هذه المرحلة سيؤدي لحذف توزيع طلابها. استمرار؟')) {
+    if (window.confirm('حذف هذه المرحلة سيؤدي لحذف توزيع طلابها. استمرار؟')) {
       setData(prev => ({
         ...prev,
         stages: prev.stages.filter(s => s.id !== id),
@@ -100,54 +100,33 @@ const App: React.FC = () => {
       }));
     }
   };
-
-  // --- Teacher Management ---
-  const addTeacher = () => {
-    if (newTeacherName.trim()) {
-      setData(prev => ({ ...prev, teachers: [...prev.teachers, newTeacherName.trim()] }));
-      setNewTeacherName('');
-    }
-  };
-
-  const removeTeacher = (index: number) => {
-    setData(prev => ({
-        ...prev,
-        teachers: prev.teachers.filter((_, i) => i !== index)
-    }));
-  };
-
-  const handleTeacherImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      try {
-        const wb = await readExcelFile(e.target.files[0]);
-        if (wb.SheetNames.length > 0) {
-            const sheetData = getSheetData(wb, wb.SheetNames[0]);
-            // Assume names are in the first column, skip header if it looks like a header
-            const newTeachers: string[] = [];
-            for(let i=0; i<sheetData.length; i++) {
-                const row = sheetData[i];
-                if (row[0]) {
-                    const name = String(row[0]).trim();
-                    if (name && name !== 'الاسم' && name !== 'اسم المعلم') {
-                        newTeachers.push(name);
-                    }
-                }
-            }
-            if (newTeachers.length > 0) {
-                setData(prev => ({ ...prev, teachers: Array.from(new Set([...prev.teachers, ...newTeachers])) }));
-                alert(`تم استيراد ${newTeachers.length} معلم بنجاح`);
-            } else {
-                alert('لم يتم العثور على أسماء في العمود الأول');
-            }
-        }
-      } catch (err) {
-        alert('فشل قراءة الملف');
+  
+  const removeAllStages = () => {
+      if (confirm('تحذير: سيتم حذف جميع المراحل والطلاب وتصفير توزيع اللجان. هل أنت متأكد؟')) {
+          setData(prev => ({
+              ...prev,
+              stages: [],
+              committees: prev.committees.map(c => ({ ...c, counts: {} }))
+          }));
       }
+  };
+
+  const renameStage = (id: number, currentName: string) => {
+    const newName = window.prompt('أدخل الاسم الجديد للمرحلة:', currentName);
+    if (newName && newName.trim() !== '') {
+      setData(prev => ({
+        ...prev,
+        stages: prev.stages.map(s => s.id === id ? { ...s, name: newName.trim() } : s)
+      }));
     }
   };
 
   const handleScheduleSave = (schedule: ExamSchedule) => {
       setData(prev => ({ ...prev, schedule }));
+  };
+
+  const handleUpdateTeachers = (updatedTeachers: Teacher[]) => {
+      setData(prev => ({ ...prev, teachers: updatedTeachers }));
   };
 
   return (
@@ -256,61 +235,6 @@ const App: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Teacher Management */}
-                    <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
-                        <div className="flex items-center justify-between mb-6">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600">
-                                    <Users className="w-6 h-6" />
-                                </div>
-                                <h2 className="text-xl font-bold text-gray-800">بيانات المعلمين (الملاحظين)</h2>
-                            </div>
-                            <div className="relative">
-                                <input 
-                                    type="file" 
-                                    accept=".xlsx, .xls"
-                                    onChange={handleTeacherImport}
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                />
-                                <button className="bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-gray-50 flex items-center gap-2">
-                                    <Upload className="w-4 h-4" /> استيراد من Excel
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-2 mb-4">
-                            <input 
-                                type="text"
-                                value={newTeacherName}
-                                onChange={(e) => setNewTeacherName(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && addTeacher()}
-                                placeholder="أدخل اسم المعلم..."
-                                className="flex-1 rounded-xl border-gray-300 bg-gray-50 p-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
-                            />
-                            <button 
-                                onClick={addTeacher}
-                                className="bg-orange-600 text-white px-4 rounded-xl hover:bg-orange-700 transition"
-                            >
-                                <UserPlus className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        <div className="bg-gray-50 rounded-xl p-4 min-h-[100px] max-h-[200px] overflow-y-auto border border-gray-100">
-                            {data.teachers.length > 0 ? (
-                                <div className="flex flex-wrap gap-2">
-                                    {data.teachers.map((t, idx) => (
-                                        <div key={idx} className="bg-white border border-gray-200 px-3 py-1 rounded-full text-sm font-bold text-gray-700 flex items-center gap-2 shadow-sm">
-                                            {t}
-                                            <button onClick={() => removeTeacher(idx)} className="text-gray-400 hover:text-red-500"><X className="w-3 h-3" /></button>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center text-gray-400 text-sm py-4">لم يتم إضافة معلمين بعد. يمكنك الإضافة يدوياً أو الاستيراد.</div>
-                            )}
-                        </div>
-                    </div>
-
                     <div className="flex justify-end">
                         <button 
                             onClick={() => setStep(AppStep.IMPORT)} 
@@ -324,14 +248,24 @@ const App: React.FC = () => {
 
             {/* Step 2: Import */}
             <div className={step === AppStep.IMPORT ? 'block animate-fade-in' : 'hidden'}>
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
                     <h2 className="text-xl font-bold text-gray-800">إدارة المراحل والطلاب</h2>
-                    <button 
-                        onClick={() => setShowImport(true)}
-                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl font-bold shadow-md shadow-green-100 text-sm flex items-center gap-2 transition-all"
-                    >
-                        + استيراد مرحلة جديدة
-                    </button>
+                    <div className="flex gap-2">
+                        {data.stages.length > 0 && (
+                             <button 
+                                onClick={removeAllStages}
+                                className="bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-xl font-bold border border-red-100 text-sm flex items-center gap-2 transition-all"
+                            >
+                                <Trash2 className="w-4 h-4" /> حذف الكل
+                            </button>
+                        )}
+                        <button 
+                            onClick={() => setShowImport(true)}
+                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl font-bold shadow-md shadow-green-100 text-sm flex items-center gap-2 transition-all"
+                        >
+                            <PlusCircle className="w-5 h-5" /> استيراد مرحلة جديدة
+                        </button>
+                    </div>
                 </div>
 
                 {showImport && (
@@ -343,21 +277,35 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {data.stages.map(stage => (
                         <div key={stage.id} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow relative group">
-                            <button 
-                                onClick={() => removeStage(stage.id)}
-                                className="absolute top-4 left-4 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-                            >
-                                <Trash2 className="w-5 h-5" />
-                            </button>
-                            <div className="flex items-center gap-3 mb-3">
-                                <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-lg">
-                                    {stage.name.charAt(0)}
+                            <div className="flex justify-between items-start mb-3">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-lg">
+                                        {stage.name.charAt(0)}
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-gray-800">{stage.name}</h3>
+                                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">بادئة الجلوس: {stage.prefix}</span>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 className="font-bold text-gray-800">{stage.name}</h3>
-                                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">بادئة الجلوس: {stage.prefix}</span>
+                                
+                                <div className="flex gap-1">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); renameStage(stage.id, stage.name); }}
+                                        className="text-gray-400 hover:text-blue-500 hover:bg-blue-50 p-1.5 rounded-lg transition-all"
+                                        title="تعديل الاسم"
+                                    >
+                                        <Edit className="w-4 h-4" />
+                                    </button>
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); removeStage(stage.id); }}
+                                        className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-all"
+                                        title="حذف المرحلة"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
                                 </div>
                             </div>
+                            
                             <div className="flex justify-between items-center bg-gray-50 rounded-xl p-3">
                                 <span className="text-xs font-bold text-gray-500">عدد الطلاب</span>
                                 <span className="text-lg font-black text-gray-800">{stage.total}</span>
@@ -381,15 +329,21 @@ const App: React.FC = () => {
                         onChange={(updated) => setData(prev => ({ ...prev, committees: updated }))}
                     />
                 ) : (
-                    <div className="text-center py-20 text-gray-400">
-                        يرجى إضافة طلاب أولاً في الخطوة السابقة.
+                    <div className="text-center py-20 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
+                        <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
+                        <p className="text-gray-500 font-bold">يرجى إضافة طلاب ومراحل أولاً في الخطوة السابقة.</p>
+                        <button onClick={() => setStep(AppStep.IMPORT)} className="mt-4 text-primary underline">الذهاب لاستيراد الطلاب</button>
                     </div>
                 )}
             </div>
 
             {/* Step 4: Teacher Distribution (NEW) */}
             <div className={step === AppStep.TEACHERS ? 'block animate-fade-in' : 'hidden'}>
-                 <InvigilatorDistributionPanel data={data} onSave={handleScheduleSave} />
+                 <InvigilatorDistributionPanel 
+                    data={data} 
+                    onSave={handleScheduleSave} 
+                    onUpdateTeachers={handleUpdateTeachers} 
+                 />
             </div>
 
             {/* Step 5: Print Center */}

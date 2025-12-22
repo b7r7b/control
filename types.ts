@@ -45,12 +45,17 @@ export interface ExamSchedule {
   teachersPerCommittee: number;
 }
 
+export interface Teacher {
+  name: string;
+  phone: string;
+}
+
 export interface AppData {
   school: SchoolData;
   stages: Stage[];
   committees: Committee[];
-  teachers: string[]; 
-  schedule?: ExamSchedule; // New: Saved Schedule
+  teachers: Teacher[]; // Updated from string[] to Teacher[]
+  schedule?: ExamSchedule; 
 }
 
 export interface PrintSettings {

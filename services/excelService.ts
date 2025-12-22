@@ -19,20 +19,29 @@ export const getSheetData = (workbook: XLSX.WorkBook, sheetName: string): any[][
   return XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 };
 
-export const parseStudents = (data: any[][], mapping: { nameIdx: number; idIdx: number; gradeIdx: number; classIdx: number }): Student[] => {
+export const parseStudents = (data: any[][], mapping: { nameIdx: number; idIdx: number; gradeIdx: number; classIdx: number }, headerRowIndex: number = 0): Student[] => {
   const students: Student[] = [];
-  // Start from 1 to skip header
-  for (let i = 1; i < data.length; i++) {
+  
+  // Start from headerRowIndex + 1 to skip the header row itself
+  for (let i = headerRowIndex + 1; i < data.length; i++) {
     const row = data[i];
-    if (row && row[mapping.nameIdx]) {
+    // Ensure row exists and has the name column
+    if (row && row[mapping.nameIdx] !== undefined && row[mapping.nameIdx] !== null) {
+      const name = String(row[mapping.nameIdx]).trim();
+      // Skip empty names or lines that might be page footers
+      if (name.length < 2) continue;
+
       students.push({
-        name: String(row[mapping.nameIdx]).trim(),
+        name: name,
         studentId: mapping.idIdx !== -1 ? String(row[mapping.idIdx] || '') : '',
-        grade: mapping.gradeIdx !== -1 ? String(row[mapping.gradeIdx] || '') : '',
-        class: mapping.classIdx !== -1 ? String(row[mapping.classIdx] || '') : '',
+        grade: mapping.gradeIdx !== -1 ? String(row[mapping.gradeIdx] || '').trim() : '',
+        class: mapping.classIdx !== -1 ? String(row[mapping.classIdx] || '').trim() : '',
       });
     }
   }
-  // Sort alphabetically by Arabic name
-  return students.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+  
+  // Strict Alphabetical Sort by Name (Arabic)
+  return students.sort((a, b) => {
+    return a.name.localeCompare(b.name, 'ar');
+  });
 };

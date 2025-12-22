@@ -1,3 +1,4 @@
+
 import { AppData, PrintSettings, DynamicReportConfig } from '../types';
 
 // --- Shared Components ---
@@ -126,7 +127,7 @@ const openPrintWindow = (content: string, orientation: 'portrait' | 'landscape' 
 // ==================== REPORT IMPLEMENTATIONS =============================
 // =========================================================================
 
-// 1. Student Counts in Committees (Form 1)
+// 1. Student Counts in Committees
 export const printStudentCountsReport = (data: AppData, settings: PrintSettings, config?: DynamicReportConfig) => {
   const fClass = getField(config, 'col_class', 'الصف');
   const fComm = getField(config, 'col_comm', 'رقم اللجنة');
@@ -202,7 +203,47 @@ export const printStudentCountsReport = (data: AppData, settings: PrintSettings,
   openPrintWindow(content, 'portrait');
 };
 
-// 2. Invigilator Attendance List (Form 2)
+// 2. Committee Data Table
+export const printCommitteeData = (data: AppData, settings: PrintSettings) => {
+    let rows = '';
+    data.committees.forEach(c => {
+        const total = data.stages.reduce((acc, s) => acc + (c.counts[s.id] || 0), 0);
+        const stagesInComm = data.stages
+            .filter(s => (c.counts[s.id] || 0) > 0)
+            .map(s => s.name)
+            .join('، ');
+        
+        rows += `
+          <tr>
+            <td style="font-weight:900; font-size:14px;">${c.name}</td>
+            <td>${c.location}</td>
+            <td>${stagesInComm}</td>
+            <td style="font-weight:900;">${total}</td>
+          </tr>
+        `;
+    });
+
+    const content = `
+    <div>
+      ${getHeaderHTML(data.school, settings)}
+      <h2 style="text-align: center; margin-bottom: 20px;">بيانات اللجان</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>رقم اللجنة</th>
+            <th>مقر اللجنة</th>
+            <th>الصفوف الدراسية</th>
+            <th>عدد الطلاب</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    `;
+    openPrintWindow(content, 'portrait');
+};
+
+// 3. Invigilator Attendance List
 export const printInvigilatorAttendance = (
     data: AppData, 
     settings: PrintSettings, 
@@ -220,9 +261,7 @@ export const printInvigilatorAttendance = (
   const items = data.committees.length > 0 ? data.committees : Array(15).fill({ name: '', location: '' });
   
   items.forEach((c: any) => {
-    // Check if there is an assigned teacher for this committee
     const teacherName = assignments && c.name ? (assignments[c.name] || '') : '';
-
     rows += `
       <tr style="height: 30px;">
         ${fCommNo.visible ? `<td>${c.name || ''}</td>` : ''}
@@ -262,22 +301,511 @@ export const printInvigilatorAttendance = (
         </thead>
         <tbody>${rows}</tbody>
       </table>
-
-      <div style="margin-top:15px; display:flex; font-size:11px;">
-         <div style="width:15%; border:1px solid #000; background:#eee; display:flex; align-items:center; justify-content:center; font-weight:900;">الاحتياط</div>
-         <div style="width:85%;">
-            <div style="border:1px solid #000; border-right:none; height:25px; display:flex;"><div style="flex:1; border-left:1px solid #000;"></div><div style="width:80px;"></div></div>
-            <div style="border:1px solid #000; border-right:none; border-top:none; height:25px; display:flex;"><div style="flex:1; border-left:1px solid #000;"></div><div style="width:80px;"></div></div>
-            <div style="border:1px solid #000; border-right:none; border-top:none; height:25px; display:flex;"><div style="flex:1; border-left:1px solid #000;"></div><div style="width:80px;"></div></div>
-         </div>
-      </div>
-      <div style="margin-top:15px; font-weight:900;">مدير المدرسة: ....................................... التوقيع: .....................</div>
     </div>
   `;
   openPrintWindow(content, 'portrait');
 };
 
-// 3. Absence Record (Form 3)
+// 4. Answer Paper Receipt
+export const printAnswerPaperReceipt = (data: AppData, settings: PrintSettings, config?: DynamicReportConfig) => {
+    const colComm = getField(config, 'col_comm', 'رقم اللجنة');
+    const colApplicants = getField(config, 'col_applicants', 'المتقدمون');
+    const colPresent = getField(config, 'col_present', 'الحاضرون');
+    const colAbsent = getField(config, 'col_absent', 'الغائبون');
+    const colTotal = getField(config, 'col_total', 'المجموع');
+    const colNotes = getField(config, 'col_notes', 'ملاحظات');
+  
+    let rows = '';
+    data.committees.forEach((c: any, index: number) => {
+      const totalStudents = data.stages.reduce((acc, stage) => acc + (c.counts[stage.id] || 0), 0);
+      rows += `
+        <tr style="height: 28px;">
+          <td>${index + 1}</td>
+          ${colComm.visible ? `<td>${c.name || ''}</td>` : ''}
+          ${colApplicants.visible ? `<td>${totalStudents || ''}</td>` : ''}
+          ${colPresent.visible ? `<td></td>` : ''}
+          ${colAbsent.visible ? `<td></td>` : ''}
+          ${colTotal.visible ? `<td></td>` : ''}
+          ${colNotes.visible ? `<td></td>` : ''}
+        </tr>
+      `;
+    });
+  
+    const content = `
+      <div>
+        ${getHeaderHTML(data.school, settings)}
+        <h2 style="text-align: center; margin-bottom: 20px;">${config?.title || 'كشف استلام أوراق الإجابة'}</h2>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:40px">م</th>
+              ${colComm.visible ? `<th>${colComm.label}</th>` : ''}
+              ${colApplicants.visible ? `<th>${colApplicants.label}</th>` : ''}
+              ${colPresent.visible ? `<th>${colPresent.label}</th>` : ''}
+              ${colAbsent.visible ? `<th>${colAbsent.label}</th>` : ''}
+              ${colTotal.visible ? `<th>${colTotal.label}</th>` : ''}
+              ${colNotes.visible ? `<th>${colNotes.label}</th>` : ''}
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+    openPrintWindow(content, 'landscape');
+};
+
+// 8. Unassigned Students
+export const printUnassignedStudents = (data: AppData, settings: PrintSettings) => {
+    let rows = '';
+    let count = 0;
+    
+    // Calculate how many students are assigned in each stage
+    const assignedCounts: Record<number, number> = {};
+    data.stages.forEach(s => assignedCounts[s.id] = 0);
+    
+    data.committees.forEach(c => {
+        data.stages.forEach(s => {
+            assignedCounts[s.id] += (c.counts[s.id] || 0);
+        });
+    });
+
+    data.stages.forEach(s => {
+        const assigned = assignedCounts[s.id];
+        if (assigned < s.students.length) {
+            // Get unassigned students
+            const unassigned = s.students.slice(assigned);
+            unassigned.forEach(st => {
+                count++;
+                rows += `
+                  <tr>
+                    <td>${count}</td>
+                    <td>${st.name}</td>
+                    <td>${st.studentId}</td>
+                    <td>${st.grade}</td>
+                    <td>${st.class}</td>
+                    <td>${s.name}</td>
+                  </tr>
+                `;
+            });
+        }
+    });
+
+    if (rows === '') {
+        rows = '<tr><td colspan="6">جميع الطلاب موزعين على اللجان</td></tr>';
+    }
+
+    const content = `
+    <div>
+      ${getHeaderHTML(data.school, settings)}
+      <h2 style="text-align: center; margin-bottom: 20px;">كشف بأسماء الطلاب غير المرتبطين بلجان</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40px">م</th>
+            <th>اسم الطالب</th>
+            <th>رقم الجلوس</th>
+            <th>الصف</th>
+            <th>الفصل</th>
+            <th>المرحلة</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    `;
+    openPrintWindow(content, 'portrait');
+};
+
+// 9. Empty Committees
+export const printEmptyCommittees = (data: AppData, settings: PrintSettings) => {
+    let rows = '';
+    data.committees.forEach(c => {
+        const total = data.stages.reduce((acc, s) => acc + (c.counts[s.id] || 0), 0);
+        if (total === 0) {
+            rows += `
+              <tr>
+                <td style="font-weight:900;">${c.name}</td>
+                <td>${c.location}</td>
+                <td>فارغة</td>
+              </tr>
+            `;
+        }
+    });
+
+    if (rows === '') {
+        rows = '<tr><td colspan="3">لا توجد لجان فارغة</td></tr>';
+    }
+
+    const content = `
+    <div>
+      ${getHeaderHTML(data.school, settings)}
+      <h2 style="text-align: center; margin-bottom: 20px;">كشف بأسماء اللجان الفارغة</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>رقم اللجنة</th>
+            <th>مقر اللجنة</th>
+            <th>الحالة</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    `;
+    openPrintWindow(content, 'portrait');
+};
+
+// 11. Distribution by Grade/Class
+export const printDistributionByGrade = (data: AppData, settings: PrintSettings) => {
+    // This report groups students by Class within stages, and shows which committees they are in
+    // This is complex because students are split across committees.
+    // We will list: Grade - Class - Student Range - Committee(s)
+    
+    let html = '';
+    
+    data.stages.forEach(stage => {
+        let rows = '';
+        
+        // Group students by class
+        const classGroups: Record<string, number> = {};
+        stage.students.forEach(s => {
+            const cls = s.class || 'بدون فصل';
+            classGroups[cls] = (classGroups[cls] || 0) + 1;
+        });
+
+        // We can't easily map exact student to exact committee without running the cursor logic again
+        // Let's run the cursor logic to find out which class goes to which committee
+        
+        // Simulating distribution
+        let currentStudentIdx = 0;
+        const distributionMap: {className: string, committee: string, count: number}[] = [];
+        
+        data.committees.forEach(c => {
+            const countInComm = c.counts[stage.id] || 0;
+            if (countInComm > 0) {
+                // Students from currentStudentIdx to currentStudentIdx + countInComm
+                const committeeStudents = stage.students.slice(currentStudentIdx, currentStudentIdx + countInComm);
+                
+                // Group these students by class
+                const commClassCounts: Record<string, number> = {};
+                committeeStudents.forEach(s => {
+                    const cls = s.class || 'عام';
+                    commClassCounts[cls] = (commClassCounts[cls] || 0) + 1;
+                });
+                
+                Object.entries(commClassCounts).forEach(([cls, cnt]) => {
+                     distributionMap.push({ className: cls, committee: c.name, count: cnt });
+                });
+                
+                currentStudentIdx += countInComm;
+            }
+        });
+        
+        // Sort and Render
+        distributionMap.sort((a,b) => a.className.localeCompare(b.className));
+        
+        distributionMap.forEach(d => {
+            rows += `<tr><td>${d.className}</td><td>${d.committee}</td><td>${d.count}</td></tr>`;
+        });
+
+        if (rows) {
+            html += `
+                <h3 style="margin-top:20px; border-bottom:1px solid #000;">${stage.name}</h3>
+                <table style="margin-top:5px;">
+                    <thead><tr><th>الفصل</th><th>اللجنة</th><th>عدد الطلاب</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+    });
+
+    const content = `
+    <div>
+      ${getHeaderHTML(data.school, settings)}
+      <h2 style="text-align: center; margin-bottom: 20px;">توزيع الطلاب على اللجان حسب الصفوف والفصول</h2>
+      ${html}
+    </div>
+    `;
+    openPrintWindow(content, 'portrait');
+};
+
+// 13. Exam Paper Tracking
+export const printExamPaperTracking = (data: AppData, settings: PrintSettings, config?: DynamicReportConfig) => {
+    const lblTeacher = getField(config, 'lbl_teacher', 'اسم المعلم');
+    const lblSubject = getField(config, 'lbl_subject', 'المادة');
+    const lblGrade = getField(config, 'lbl_grade', 'الصف / المستوى');
+    const lblTrack = getField(config, 'lbl_track', 'المسار');
+    const lblAssignDate = getField(config, 'lbl_assign_date', 'تاريخ الاستلام');
+    const lblAssignSig = getField(config, 'lbl_assign_sig', 'التوقيع');
+    const lblEnvQ = getField(config, 'lbl_env_q', 'أصل الأسئلة');
+    const lblEnvA = getField(config, 'lbl_env_a', 'أصل الإجابة');
+    const lblEnvS = getField(config, 'lbl_env_s', 'أسئلة الطلاب');
+    const lblDeliverDate = getField(config, 'lbl_deliver_date', 'تاريخ التسليم');
+    const lblDeliverSig = getField(config, 'lbl_deliver_sig', 'التوقيع');
+  
+    let rows = '';
+    for(let i=0; i<15; i++) {
+        rows += `
+          <tr style="height: 30px;">
+             ${lblTeacher.visible ? `<td></td>` : ''}
+             ${lblSubject.visible ? `<td></td>` : ''}
+             ${lblGrade.visible ? `<td></td>` : ''}
+             ${lblTrack.visible ? `<td></td>` : ''}
+             
+             ${lblAssignDate.visible ? `<td style="font-size:10px; color:#aaa;"></td>` : ''}
+             ${lblAssignSig.visible ? `<td></td>` : ''}
+
+             ${lblEnvQ.visible ? `<td></td>` : ''}
+             ${lblEnvA.visible ? `<td></td>` : ''}
+             ${lblEnvS.visible ? `<td></td>` : ''}
+
+             ${lblDeliverDate.visible ? `<td style="font-size:10px; color:#aaa;"></td>` : ''}
+             ${lblDeliverSig.visible ? `<td></td>` : ''}
+             <td></td>
+          </tr>
+        `;
+    }
+  
+    const content = `
+      <div>
+        ${getHeaderHTML(data.school, settings)}
+        <h2 style="text-align: center; color: #333; margin-bottom: 15px;">${config?.title || 'متابعة سير أوراق الإجابة'}</h2>
+        
+        <table style="width:100%;">
+          <thead>
+            <tr style="background:#d0e0d0;">
+               ${lblTeacher.visible ? `<th rowspan="2">${lblTeacher.label}</th>` : ''}
+               ${lblSubject.visible ? `<th rowspan="2">${lblSubject.label}</th>` : ''}
+               ${lblGrade.visible ? `<th rowspan="2">${lblGrade.label}</th>` : ''}
+               ${lblTrack.visible ? `<th rowspan="2">${lblTrack.label}</th>` : ''}
+               
+               <th colspan="${(lblAssignDate.visible?1:0) + (lblAssignSig.visible?1:0)}" style="background:#e0e0e0;">استلام قرار التكليف</th>
+               
+               ${lblEnvQ.visible ? `<th rowspan="2" style="width:50px;">${lblEnvQ.label}</th>` : ''}
+               ${lblEnvA.visible ? `<th rowspan="2" style="width:50px;">${lblEnvA.label}</th>` : ''}
+               ${lblEnvS.visible ? `<th rowspan="2" style="width:70px;">${lblEnvS.label}</th>` : ''}
+
+               <th colspan="${(lblDeliverDate.visible?1:0) + (lblDeliverSig.visible?1:0)}" style="background:#e0e0e0;">تسليم وكيل الشؤون التعليمية</th>
+               
+               <th rowspan="2">ملاحظات</th>
+            </tr>
+            <tr style="background:#f0f0f0;">
+               ${lblAssignDate.visible ? `<th style="width:80px;">${lblAssignDate.label}</th>` : ''}
+               ${lblAssignSig.visible ? `<th>${lblAssignSig.label}</th>` : ''}
+               
+               ${lblDeliverDate.visible ? `<th style="width:80px;">${lblDeliverDate.label}</th>` : ''}
+               ${lblDeliverSig.visible ? `<th>${lblDeliverSig.label}</th>` : ''}
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+    openPrintWindow(content, 'landscape');
+};
+
+// 15. Violation Minutes
+export const printViolationMinutes = (data: AppData, settings: PrintSettings) => {
+    const content = `
+    <div>
+      ${getHeaderHTML(data.school, settings)}
+      <h2 style="text-align: center; margin-bottom: 20px; text-decoration: underline;">محضر مخالفة الأنظمة والتعليمات</h2>
+      
+      <div style="margin-bottom: 20px; font-size: 13px; line-height: 2;">
+        إنه في يوم ..................... الموافق .... / .... / .... 14هـ ، وفي تمام الساعة ............
+        <br>
+        أثناء سير اختبار مادة .............................. للصف ..............................
+        <br>
+        تم ضبط الطالب/ـة: ............................................................ رقم الجلوس: ( ..................... )
+        <br>
+        في اللجنة رقم: ( .......... ) بمخالفة التعليمات والأنظمة، وهي:
+        <br>
+        <div style="border:1px solid #ccc; height:80px; margin: 10px 0;"></div>
+      </div>
+
+      <div style="border: 1px solid #000; padding: 10px; margin-bottom: 20px;">
+         <h3 style="margin:0 0 10px 0;">وسيلة الغش المضبوطة (إن وجدت):</h3>
+         <div style="display:flex; justify-content:space-around;">
+            <span><span style="border:1px solid #000; width:15px; height:15px; display:inline-block;"></span> قصاصات ورقية</span>
+            <span><span style="border:1px solid #000; width:15px; height:15px; display:inline-block;"></span> هاتف جوال</span>
+            <span><span style="border:1px solid #000; width:15px; height:15px; display:inline-block;"></span> كتابة على اليد/الأدوات</span>
+            <span><span style="border:1px solid #000; width:15px; height:15px; display:inline-block;"></span> أخرى: ............</span>
+         </div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
+        <div style="width: 48%;">
+            <h3 style="text-align:center; background:#eee; padding:5px; border:1px solid #000;">شهادة الملاحظين</h3>
+            <div style="margin-top:10px;">
+                1. الاسم: ................................. التوقيع: .............<br><br>
+                2. الاسم: ................................. التوقيع: .............
+            </div>
+        </div>
+        <div style="width: 48%;">
+            <h3 style="text-align:center; background:#eee; padding:5px; border:1px solid #000;">إقرار الطالب</h3>
+            <div style="margin-top:10px;">
+                أقر أنا الطالب الموضح اسمه أعلاه بصحة ما ورد في هذا المحضر.<br><br>
+                التوقيع: .................................
+            </div>
+        </div>
+      </div>
+      
+      <div style="border-top: 2px dashed #000; padding-top: 10px;">
+         <h3>رأي لجنة التحكم والضبط:</h3>
+         <div style="height: 60px;"></div>
+         <div style="display:flex; justify-content:space-between; font-weight:900;">
+            <div>عضو اللجنة: .....................</div>
+            <div>عضو اللجنة: .....................</div>
+            <div>رئيس اللجنة: .....................</div>
+         </div>
+      </div>
+      
+       <div style="margin-top:20px; font-weight:900; text-align:center;">يعتمد، مدير المدرسة: ..................................................... التوقيع: ........................</div>
+    </div>
+    `;
+    openPrintWindow(content, 'portrait');
+};
+
+// 17. Sub-Committee Tasks
+export const printSubCommitteeTasks = (data: AppData, settings: PrintSettings) => {
+    const tasks = [
+        "التأكد من تهيئة مقر اللجنة ونظافته وترتيب الطاولات.",
+        "استلام مظروف الأسئلة من لجنة التحكم والضبط قبل بدء الاختبار بوقت كاف.",
+        "فتح المظروف داخل اللجنة والتأكد من عدد الأوراق وسلامتها.",
+        "توزيع أوراق الأسئلة على الطلاب في الوقت المحدد.",
+        "مطابقة هوية الطلاب والتأكد من جلوس كل طالب في مكانه الصحيح.",
+        "منع دخول أي وسائل غير مسموح بها (جوالات، كتب، مذكرات).",
+        "الالتزام بالهدوء وتوفير الجو المناسب للطلاب.",
+        "عدم تفسير الأسئلة أو قراءتها إلا من قبل معلم المادة.",
+        "استلام أوراق الإجابة من الطلاب وعدها وترتيبها تصاعدياً حسب أرقام الجلوس.",
+        "تسليم أوراق الإجابة والمتبقي من الأسئلة للجنة التحكم والضبط فور انتهاء الوقت."
+    ];
+    
+    let tasksHtml = '';
+    tasks.forEach((t, i) => {
+        tasksHtml += `<div style="margin-bottom: 10px; font-size: 14px;">${i+1}. ${t}</div>`;
+    });
+
+    const content = `
+    <div>
+      ${getHeaderHTML(data.school, settings)}
+      <h2 style="text-align: center; margin-bottom: 20px; border:2px solid #000; display:inline-block; padding:5px 20px; border-radius:10px;">مهام لجان الاختبارات الفرعية (الملاحظين)</h2>
+      
+      <div style="border: 2px solid #000; padding: 20px; background: #fcfcfc; border-radius: 10px;">
+         ${tasksHtml}
+      </div>
+
+      <div style="margin-top: 40px;">
+         <h3>إقرار بالعلم:</h3>
+         <p>أقر أنا الموقع أدناه باطلاعي على مهام الملاحظة والتقيد بها.</p>
+         <table style="margin-top: 20px;">
+            <thead>
+                <tr>
+                    <th>م</th>
+                    <th>اسم الملاحظ</th>
+                    <th>التوقيع</th>
+                    <th>التاريخ</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${Array(10).fill(0).map((_, i) => `
+                <tr style="height:35px;">
+                    <td>${i+1}</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>`).join('')}
+            </tbody>
+         </table>
+      </div>
+      
+       <div style="margin-top:20px; font-weight:900; text-align:left;">مدير المدرسة: .......................................</div>
+    </div>
+    `;
+    openPrintWindow(content, 'portrait');
+};
+
+// Standard Reports Imports
+export const printDoorLabels = (data: AppData, settings: PrintSettings) => {
+    let html = '';
+    data.committees.forEach(committee => {
+      const totalStudents = data.stages.reduce((acc, stage) => acc + (committee.counts[stage.id] || 0), 0);
+      if (totalStudents === 0) return;
+      let detailsHtml = '';
+      data.stages.forEach(stage => {
+        const count = committee.counts[stage.id] || 0;
+        if (count > 0) {
+          detailsHtml += `<div style="display: flex; justify-content: space-between; border-bottom: 2px dotted #ccc; padding: 10px 0; font-size: 20px;"><span>${stage.name}</span><span style="font-weight: 900; color: #208caa;">${count}</span></div>`;
+        }
+      });
+      const pageContent = `<div style="padding: 10px; position: relative;">${getHeaderHTML(data.school, settings)}<div style="text-align: center; margin-top: 20px;"><h1 style="font-size: 24px; color: #208caa; border: 3px solid #208caa; display: inline-block; padding: 8px 40px; border-radius: 50px;">${settings.doorLabelTitle}</h1></div><div style="border: 5px solid #000; border-radius: 30px; padding: 40px; margin: 30px auto; width: 85%; background: #fff; text-align: center; box-shadow: 10px 10px 0px #eee;"><div style="font-size: 24px; color: #000; margin-bottom: 10px; font-weight:800;">لجنة رقم</div><div style="font-size: 180px; font-weight: 900; line-height: 1; color: #000;">${committee.name}</div><div style="font-size: 40px; margin-top: 20px; color: #7030A0; font-weight: 900;">${committee.location || ''}</div></div><div style="width: 80%; margin: 30px auto; text-align: right; background: #f9f9f9; padding: 20px; border-radius: 20px; border: 2px solid #ddd;">${detailsHtml}<div style="margin-top: 20px; padding-top: 15px; border-top: 3px solid #000; font-weight: 900; font-size: 24px; text-align: left;">الإجمالي: ${totalStudents} طالب</div></div></div>`;
+      html += `<div class="page-break">${pageContent}</div>`;
+    });
+    openPrintWindow(html, 'portrait');
+};
+
+export const printAttendance = (data: AppData, settings: PrintSettings) => {
+    let html = '';
+  const cursors: Record<number, number> = {};
+  data.stages.forEach(s => cursors[s.id] = 0);
+
+  data.committees.forEach(committee => {
+    let rows = '';
+    let sn = 1;
+    let hasStudents = false;
+    data.stages.forEach(stage => {
+      const count = committee.counts[stage.id] || 0;
+      if (count > 0) {
+        hasStudents = true;
+        for (let i = 0; i < count; i++) {
+          const idx = cursors[stage.id]++;
+          const student = stage.students[idx] || { name: '...', studentId: '-' };
+          const seatNumber = stage.prefix + String(idx + 1).padStart(3, '0');
+          rows += `<tr>${settings.showColSequence ? `<td style="width:30px;">${sn++}</td>` : ''}${settings.showColSeatId ? `<td style="font-weight: 900; font-size: 13px;">${seatNumber}</td>` : ''}${settings.showColName ? `<td style="text-align: right; padding-right: 10px; font-weight: 800;">${student.name}</td>` : ''}${settings.showColStage ? `<td>${stage.name}</td>` : ''}${settings.showColPresence ? `<td></td>` : ''}${settings.showColSignature ? `<td></td>` : ''}</tr>`;
+        }
+      }
+    });
+    if (!hasStudents) return;
+    const pageContent = `<div>${getHeaderHTML(data.school, settings)}<div style="text-align: center; margin: 10px 0 15px 0; border-bottom: 1px solid #eee; padding-bottom: 5px;"><h2 style="margin: 0; color: #208caa; font-size: 20px;">${settings.attendanceTitle}</h2><div style="display: flex; justify-content: center; gap: 20px; margin-top: 5px; font-size: 16px; font-weight: 800;"><span>اللجنة: ${committee.name}</span><span>|</span><span>المقر: ${committee.location || '___'}</span></div></div><table><thead><tr>${settings.showColSequence ? `<th style="width: 30px;">${settings.colSequence}</th>` : ''}${settings.showColSeatId ? `<th style="width: 80px;">${settings.colSeatId}</th>` : ''}${settings.showColName ? `<th>${settings.colName}</th>` : ''}${settings.showColStage ? `<th style="width: 100px;">${settings.colStage}</th>` : ''}${settings.showColPresence ? `<th style="width: 60px;">${settings.colPresence}</th>` : ''}${settings.showColSignature ? `<th style="width: 100px;">${settings.colSignature}</th>` : ''}</tr></thead><tbody>${rows}</tbody></table><div style="margin-top: 40px; display: flex; justify-content: space-between; font-weight: 800; font-size: 12px; text-align: center;"><div style="width: 30%;"><div>الملاحظ الأول</div><div style="margin-top: 20px;">..........................</div></div><div style="width: 30%;"><div>الملاحظ الثاني</div><div style="margin-top: 20px;">..........................</div></div><div style="width: 30%;"><div>مدير المدرسة</div><div style="margin-top: 20px;">..........................</div></div></div></div>`;
+    html += `<div class="page-break">${pageContent}</div>`;
+  });
+  openPrintWindow(html, 'portrait');
+};
+
+export const printSeatLabels = (data: AppData, settings: PrintSettings) => {
+  const cursors: Record<number, number> = {};
+  data.stages.forEach(s => cursors[s.id] = 0);
+  let html = '';
+  const ITEMS_PER_PAGE = 21;
+  data.committees.forEach(committee => {
+    const committeeStickers: any[] = [];
+    data.stages.forEach(stage => {
+      const count = committee.counts[stage.id] || 0;
+      if (count > 0) {
+        for (let i = 0; i < count; i++) {
+          const idx = cursors[stage.id]++;
+          const student = stage.students[idx] || { name: '...', studentId: '-' };
+          const seatNumber = stage.prefix + String(idx + 1).padStart(3, '0');
+          committeeStickers.push({ studentName: student.name, seatNumber: seatNumber, stageName: stage.name, committeeName: committee.name, location: committee.location });
+        }
+      }
+    });
+    if (committeeStickers.length === 0) return;
+    for (let i = 0; i < committeeStickers.length; i += ITEMS_PER_PAGE) {
+      const pageItems = committeeStickers.slice(i, i + ITEMS_PER_PAGE);
+      let cellsHtml = '';
+      pageItems.forEach(item => {
+        cellsHtml += `<div style="border: 1px dashed #aaa; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; text-align: center; padding: 4px; overflow: hidden; background: white; height: 100%;"><div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 2px;"><div style="font-size: 8px; text-align: right; line-height: 1.1; font-weight: 900;"><div>وزارة التعليم</div><div>${settings.schoolName || data.school.name}</div></div><img src="${settings.logoUrl}" style="height: 20px;"><div style="font-size: 8px; text-align: left; line-height: 1.1;"><div>${data.school.term}</div><div>${settings.stickerTitle}</div></div></div><div style="flex: 1; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 14px; line-height: 1.1; padding: 2px;">${item.studentName}</div><div style="background: #f0f0f0; display: flex; justify-content: space-between; align-items: center; font-size: 10px; padding: 2px 4px; border-radius: 4px; font-weight: bold;"><div>لجنة: <b>${item.committeeName}</b></div><div style="font-size: 14px; font-weight: 900; background: #fff; padding: 0 4px; border: 1px solid #ddd; border-radius: 3px;">${item.seatNumber}</div><div>${item.stageName}</div></div></div>`;
+      });
+      const remaining = ITEMS_PER_PAGE - pageItems.length;
+      for(let r=0; r<remaining; r++) { cellsHtml += `<div></div>`; }
+      html += `<div class="page-break" style="width: 100%; height: 98vh; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(7, 1fr); gap: 0; padding: 0;">${cellsHtml}</div>`;
+    }
+  });
+  if (html === '') { alert('لا يوجد طلاب لتوليد الملصقات.'); return; }
+  openPrintWindow(html, 'sticker');
+};
+
 export const printAbsenceRecord = (data: AppData, settings: PrintSettings, config?: DynamicReportConfig) => {
   const lblStudent = getField(config, 'lbl_student', 'اسم الطالب');
   const lblId = getField(config, 'lbl_id', 'رقم الجلوس');
@@ -338,11 +866,9 @@ export const printAbsenceRecord = (data: AppData, settings: PrintSettings, confi
         </div>
     </div>
   `;
-  // Two forms per page
   openPrintWindow(`<div>${getHeaderHTML(data.school, settings)}${form}<div style="margin: 20px 0; border-bottom:2px dashed #000;"></div>${form}</div>`, 'portrait');
 };
 
-// 4. Question Envelope Opening
 export const printQuestionEnvelopeOpening = (data: AppData, settings: PrintSettings, config?: DynamicReportConfig) => {
   const lblSubject = getField(config, 'lbl_subject', 'المادة');
   const lblPeriod = getField(config, 'lbl_period', 'الفترة');
@@ -396,7 +922,6 @@ export const printQuestionEnvelopeOpening = (data: AppData, settings: PrintSetti
   openPrintWindow(content, 'portrait');
 };
 
-// 5. Question Envelope Label
 export const printQuestionEnvelope = (data: AppData, settings: PrintSettings, config?: DynamicReportConfig) => {
    const lblYear = getField(config, 'lbl_year', 'العام الدراسي');
    const lblTerm = getField(config, 'lbl_term', 'الفصل الدراسي');
@@ -465,7 +990,6 @@ export const printQuestionEnvelope = (data: AppData, settings: PrintSettings, co
    openPrintWindow(content, 'portrait');
 };
 
-// 6. Answer Envelope Label
 export const printAnswerEnvelope = (data: AppData, settings: PrintSettings, config?: DynamicReportConfig) => {
     const lblYear = getField(config, 'lbl_year', 'العام الدراسي');
     const lblTerm = getField(config, 'lbl_term', 'الفصل الدراسي');
@@ -532,278 +1056,4 @@ export const printAnswerEnvelope = (data: AppData, settings: PrintSettings, conf
     </div>
    `;
    openPrintWindow(content, 'portrait');
-};
-
-// 7. Answer Paper Receipt (New) - Landscape
-export const printAnswerPaperReceipt = (data: AppData, settings: PrintSettings, config?: DynamicReportConfig) => {
-    const colComm = getField(config, 'col_comm', 'رقم اللجنة');
-    const colApplicants = getField(config, 'col_applicants', 'المتقدمون');
-    const colPresent = getField(config, 'col_present', 'الحاضرون');
-    const colAbsent = getField(config, 'col_absent', 'الغائبون');
-    const colTotal = getField(config, 'col_total', 'المجموع');
-    const colNotes = getField(config, 'col_notes', 'ملاحظات');
-  
-    let rows = '';
-    const items = data.committees.length > 0 ? data.committees : Array(15).fill({ name: '', location: '', counts: {} });
-    
-    items.forEach((c: any, index: number) => {
-      const totalStudents = data.stages.reduce((acc, stage) => acc + (c.counts[stage.id] || 0), 0);
-      rows += `
-        <tr style="height: 28px;">
-          <td>${index + 1}</td>
-          ${colComm.visible ? `<td>${c.name || ''}</td>` : ''}
-          ${colApplicants.visible ? `<td>${totalStudents || ''}</td>` : ''}
-          ${colPresent.visible ? `<td></td>` : ''}
-          ${colAbsent.visible ? `<td></td>` : ''}
-          ${colTotal.visible ? `<td></td>` : ''}
-          ${colNotes.visible ? `<td></td>` : ''}
-        </tr>
-      `;
-    });
-  
-    const content = `
-      <div>
-        ${getHeaderHTML(data.school, settings)}
-        
-        <div style="background:#e0f0e0; border:2px solid #000; padding:5px 15px; margin-bottom:10px; display:flex; justify-content:space-between; font-weight:900;">
-           <div>اسم النموذج: ${config?.title || 'كشف استلام أوراق الإجابة من اللجان'}</div>
-           <div>رقم النموذج: ( )</div>
-        </div>
-
-        <div style="display:flex; gap:20px; font-weight:900; margin-bottom:10px; border:1px solid #000; padding:8px; background:#f9f9f9; font-size:12px;">
-           <div style="flex:1;">الصف/المستوى: ........................</div>
-           <div style="flex:1;">المادة: ........................</div>
-           <div style="flex:1;">اليوم: ........................</div>
-           <div style="flex:1;">التاريخ: .... / .... / ....</div>
-        </div>
-  
-        <table>
-          <thead>
-            <tr>
-              <th style="width:40px">م</th>
-              ${colComm.visible ? `<th>${colComm.label}</th>` : ''}
-              ${colApplicants.visible ? `<th>${colApplicants.label}</th>` : ''}
-              ${colPresent.visible ? `<th>${colPresent.label}</th>` : ''}
-              ${colAbsent.visible ? `<th>${colAbsent.label}</th>` : ''}
-              ${colTotal.visible ? `<th>${colTotal.label}</th>` : ''}
-              ${colNotes.visible ? `<th>${colNotes.label}</th>` : ''}
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-          <tfoot>
-             <tr style="font-weight:900; background:#eee;">
-                 <td colspan="${2 + (colComm.visible?1:0) + (colApplicants.visible?1:0) + (colPresent.visible?1:0) + (colAbsent.visible?1:0)}">المجموع</td>
-                 <td></td>
-                 <td></td>
-             </tr>
-          </tfoot>
-        </table>
-  
-        <div style="margin-top:20px; display:flex; justify-content:space-between; font-weight:900;">
-           <div style="width:40%;">
-              <div>المستلم (عضو لجنة التحكم والضبط):</div>
-              <div style="margin-top:10px;">الاسم: ............................................</div>
-              <div style="margin-top:10px;">التوقيع: ............................................</div>
-           </div>
-           <div style="width:40%; text-align:left; padding-top:20px;">
-               • يحفظ في ملف الاختبارات.
-           </div>
-        </div>
-      </div>
-    `;
-    openPrintWindow(content, 'landscape');
-};
-  
-// 8. Exam Paper Tracking (New) - Landscape
-export const printExamPaperTracking = (data: AppData, settings: PrintSettings, config?: DynamicReportConfig) => {
-    const lblTeacher = getField(config, 'lbl_teacher', 'اسم المعلم');
-    const lblSubject = getField(config, 'lbl_subject', 'المادة');
-    const lblGrade = getField(config, 'lbl_grade', 'الصف / المستوى');
-    const lblTrack = getField(config, 'lbl_track', 'المسار');
-    const lblAssignDate = getField(config, 'lbl_assign_date', 'تاريخ الاستلام');
-    const lblAssignSig = getField(config, 'lbl_assign_sig', 'التوقيع');
-    const lblEnvQ = getField(config, 'lbl_env_q', 'أصل الأسئلة');
-    const lblEnvA = getField(config, 'lbl_env_a', 'أصل الإجابة');
-    const lblEnvS = getField(config, 'lbl_env_s', 'أسئلة الطلاب');
-    const lblDeliverDate = getField(config, 'lbl_deliver_date', 'تاريخ التسليم');
-    const lblDeliverSig = getField(config, 'lbl_deliver_sig', 'التوقيع');
-  
-    let rows = '';
-    for(let i=0; i<15; i++) {
-        rows += `
-          <tr style="height: 30px;">
-             ${lblTeacher.visible ? `<td></td>` : ''}
-             ${lblSubject.visible ? `<td></td>` : ''}
-             ${lblGrade.visible ? `<td></td>` : ''}
-             ${lblTrack.visible ? `<td></td>` : ''}
-             
-             ${lblAssignDate.visible ? `<td style="font-size:10px; color:#aaa;"></td>` : ''}
-             ${lblAssignSig.visible ? `<td></td>` : ''}
-
-             ${lblEnvQ.visible ? `<td></td>` : ''}
-             ${lblEnvA.visible ? `<td></td>` : ''}
-             ${lblEnvS.visible ? `<td></td>` : ''}
-
-             ${lblDeliverDate.visible ? `<td style="font-size:10px; color:#aaa;"></td>` : ''}
-             ${lblDeliverSig.visible ? `<td></td>` : ''}
-             <td></td>
-          </tr>
-        `;
-    }
-  
-    const content = `
-      <div>
-        ${getHeaderHTML(data.school, settings)}
-        <h2 style="text-align: center; color: #333; margin-bottom: 15px;">${config?.title || 'متابعة تسليم واستلام أسئلة ونماذج الإجابة وتصويرها وتغليفها'}</h2>
-        
-        <table style="width:100%;">
-          <thead>
-            <tr style="background:#d0e0d0;">
-               ${lblTeacher.visible ? `<th rowspan="2">${lblTeacher.label}</th>` : ''}
-               ${lblSubject.visible ? `<th rowspan="2">${lblSubject.label}</th>` : ''}
-               ${lblGrade.visible ? `<th rowspan="2">${lblGrade.label}</th>` : ''}
-               ${lblTrack.visible ? `<th rowspan="2">${lblTrack.label}</th>` : ''}
-               
-               <th colspan="${(lblAssignDate.visible?1:0) + (lblAssignSig.visible?1:0)}" style="background:#e0e0e0;">استلام قرار التكليف</th>
-               
-               ${lblEnvQ.visible ? `<th rowspan="2" style="width:50px;">${lblEnvQ.label}</th>` : ''}
-               ${lblEnvA.visible ? `<th rowspan="2" style="width:50px;">${lblEnvA.label}</th>` : ''}
-               ${lblEnvS.visible ? `<th rowspan="2" style="width:70px;">${lblEnvS.label}</th>` : ''}
-
-               <th colspan="${(lblDeliverDate.visible?1:0) + (lblDeliverSig.visible?1:0)}" style="background:#e0e0e0;">تسليم وكيل الشؤون التعليمية</th>
-               
-               <th rowspan="2">ملاحظات</th>
-            </tr>
-            <tr style="background:#f0f0f0;">
-               ${lblAssignDate.visible ? `<th style="width:80px;">${lblAssignDate.label}</th>` : ''}
-               ${lblAssignSig.visible ? `<th>${lblAssignSig.label}</th>` : ''}
-               
-               ${lblDeliverDate.visible ? `<th style="width:80px;">${lblDeliverDate.label}</th>` : ''}
-               ${lblDeliverSig.visible ? `<th>${lblDeliverSig.label}</th>` : ''}
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    `;
-    openPrintWindow(content, 'landscape');
-};
-
-// --- Standard Reports ---
-
-export const printDoorLabels = (data: AppData, settings: PrintSettings) => {
-    let html = '';
-    data.committees.forEach(committee => {
-      const totalStudents = data.stages.reduce((acc, stage) => acc + (committee.counts[stage.id] || 0), 0);
-      if (totalStudents === 0) return;
-      let detailsHtml = '';
-      data.stages.forEach(stage => {
-        const count = committee.counts[stage.id] || 0;
-        if (count > 0) {
-          detailsHtml += `<div style="display: flex; justify-content: space-between; border-bottom: 2px dotted #ccc; padding: 10px 0; font-size: 20px;"><span>${stage.name}</span><span style="font-weight: 900; color: #208caa;">${count}</span></div>`;
-        }
-      });
-      const pageContent = `<div style="padding: 10px; position: relative;">${getHeaderHTML(data.school, settings)}<div style="text-align: center; margin-top: 20px;"><h1 style="font-size: 24px; color: #208caa; border: 3px solid #208caa; display: inline-block; padding: 8px 40px; border-radius: 50px;">${settings.doorLabelTitle}</h1></div><div style="border: 5px solid #000; border-radius: 30px; padding: 40px; margin: 30px auto; width: 85%; background: #fff; text-align: center; box-shadow: 10px 10px 0px #eee;"><div style="font-size: 24px; color: #000; margin-bottom: 10px; font-weight:800;">لجنة رقم</div><div style="font-size: 180px; font-weight: 900; line-height: 1; color: #000;">${committee.name}</div><div style="font-size: 40px; margin-top: 20px; color: #7030A0; font-weight: 900;">${committee.location || ''}</div></div><div style="width: 80%; margin: 30px auto; text-align: right; background: #f9f9f9; padding: 20px; border-radius: 20px; border: 2px solid #ddd;">${detailsHtml}<div style="margin-top: 20px; padding-top: 15px; border-top: 3px solid #000; font-weight: 900; font-size: 24px; text-align: left;">الإجمالي: ${totalStudents} طالب</div></div></div>`;
-      html += `<div class="page-break">${pageContent}</div>`;
-    });
-    openPrintWindow(html, 'portrait');
-};
-
-export const printAttendance = (data: AppData, settings: PrintSettings) => {
-    let html = '';
-  const cursors: Record<number, number> = {};
-  data.stages.forEach(s => cursors[s.id] = 0);
-
-  data.committees.forEach(committee => {
-    let rows = '';
-    let sn = 1;
-    let hasStudents = false;
-    data.stages.forEach(stage => {
-      const count = committee.counts[stage.id] || 0;
-      if (count > 0) {
-        hasStudents = true;
-        for (let i = 0; i < count; i++) {
-          const idx = cursors[stage.id]++;
-          const student = stage.students[idx] || { name: '...', studentId: '-' };
-          const seatNumber = stage.prefix + String(idx + 1).padStart(3, '0');
-          rows += `<tr>${settings.showColSequence ? `<td style="width:30px;">${sn++}</td>` : ''}${settings.showColSeatId ? `<td style="font-weight: 900; font-size: 13px;">${seatNumber}</td>` : ''}${settings.showColName ? `<td style="text-align: right; padding-right: 10px; font-weight: 800;">${student.name}</td>` : ''}${settings.showColStage ? `<td>${stage.name}</td>` : ''}${settings.showColPresence ? `<td></td>` : ''}${settings.showColSignature ? `<td></td>` : ''}</tr>`;
-        }
-      }
-    });
-    if (!hasStudents) return;
-    const pageContent = `<div>${getHeaderHTML(data.school, settings)}<div style="text-align: center; margin: 10px 0 15px 0; border-bottom: 1px solid #eee; padding-bottom: 5px;"><h2 style="margin: 0; color: #208caa; font-size: 20px;">${settings.attendanceTitle}</h2><div style="display: flex; justify-content: center; gap: 20px; margin-top: 5px; font-size: 16px; font-weight: 800;"><span>اللجنة: ${committee.name}</span><span>|</span><span>المقر: ${committee.location || '___'}</span></div></div><table><thead><tr>${settings.showColSequence ? `<th style="width: 30px;">${settings.colSequence}</th>` : ''}${settings.showColSeatId ? `<th style="width: 80px;">${settings.colSeatId}</th>` : ''}${settings.showColName ? `<th>${settings.colName}</th>` : ''}${settings.showColStage ? `<th style="width: 100px;">${settings.colStage}</th>` : ''}${settings.showColPresence ? `<th style="width: 60px;">${settings.colPresence}</th>` : ''}${settings.showColSignature ? `<th style="width: 100px;">${settings.colSignature}</th>` : ''}</tr></thead><tbody>${rows}</tbody></table><div style="margin-top: 40px; display: flex; justify-content: space-between; font-weight: 800; font-size: 12px; text-align: center;"><div style="width: 30%;"><div>الملاحظ الأول</div><div style="margin-top: 20px;">..........................</div></div><div style="width: 30%;"><div>الملاحظ الثاني</div><div style="margin-top: 20px;">..........................</div></div><div style="width: 30%;"><div>مدير المدرسة</div><div style="margin-top: 20px;">..........................</div></div></div></div>`;
-    html += `<div class="page-break">${pageContent}</div>`;
-  });
-  openPrintWindow(html, 'portrait');
-};
-
-export const printSeatLabels = (data: AppData, settings: PrintSettings) => {
-  // Seat labels use a very specific grid, they don't use standard A4 portrait margins.
-  // We handle this by setting a custom page style inside the openPrintWindow logic or just use 'sticker' type
-  const cursors: Record<number, number> = {};
-  data.stages.forEach(s => cursors[s.id] = 0);
-  let html = '';
-  const ITEMS_PER_PAGE = 21;
-  data.committees.forEach(committee => {
-    const committeeStickers: any[] = [];
-    data.stages.forEach(stage => {
-      const count = committee.counts[stage.id] || 0;
-      if (count > 0) {
-        for (let i = 0; i < count; i++) {
-          const idx = cursors[stage.id]++;
-          const student = stage.students[idx] || { name: '...', studentId: '-' };
-          const seatNumber = stage.prefix + String(idx + 1).padStart(3, '0');
-          committeeStickers.push({ studentName: student.name, seatNumber: seatNumber, stageName: stage.name, committeeName: committee.name, location: committee.location });
-        }
-      }
-    });
-    if (committeeStickers.length === 0) return;
-    for (let i = 0; i < committeeStickers.length; i += ITEMS_PER_PAGE) {
-      const pageItems = committeeStickers.slice(i, i + ITEMS_PER_PAGE);
-      let cellsHtml = '';
-      pageItems.forEach(item => {
-        cellsHtml += `<div style="border: 1px dashed #aaa; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; text-align: center; padding: 4px; overflow: hidden; background: white; height: 100%;"><div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 2px;"><div style="font-size: 8px; text-align: right; line-height: 1.1; font-weight: 900;"><div>وزارة التعليم</div><div>${settings.schoolName || data.school.name}</div></div><img src="${settings.logoUrl}" style="height: 20px;"><div style="font-size: 8px; text-align: left; line-height: 1.1;"><div>${data.school.term}</div><div>${settings.stickerTitle}</div></div></div><div style="flex: 1; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 14px; line-height: 1.1; padding: 2px;">${item.studentName}</div><div style="background: #f0f0f0; display: flex; justify-content: space-between; align-items: center; font-size: 10px; padding: 2px 4px; border-radius: 4px; font-weight: bold;"><div>لجنة: <b>${item.committeeName}</b></div><div style="font-size: 14px; font-weight: 900; background: #fff; padding: 0 4px; border: 1px solid #ddd; border-radius: 3px;">${item.seatNumber}</div><div>${item.stageName}</div></div></div>`;
-      });
-      const remaining = ITEMS_PER_PAGE - pageItems.length;
-      for(let r=0; r<remaining; r++) { cellsHtml += `<div></div>`; }
-      html += `<div class="page-break" style="width: 100%; height: 98vh; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(7, 1fr); gap: 0; padding: 0;">${cellsHtml}</div>`;
-    }
-  });
-  if (html === '') { alert('لا يوجد طلاب لتوليد الملصقات.'); return; }
-  openPrintWindow(html, 'sticker');
-};
-
-// ... Old Administrative Forms (Keeping them as legacy support, but adding new ones below)
-export const printExamFileCover = (data: AppData, settings: PrintSettings) => {
-    // Legacy Implementation
-    const listItems = ["احصائية الحضور اليومي", "استلام الكنترول من الملاحظين", "أسماء المصححين والمراجعين", "اعداد التصوير", "اعداد الطلاب", "المادة وتصحيحها ومراجعتها", "تأخر طالب", "تسليم أسئلة الاختبار", "توزيع الملاحظين", "جدول التصوير", "عدد الطلاب في كل لجنة", "غش طالب", "غياب طالب", "كليشة ظروف الاختبارات", "محضر فتح المظروف", "استلام وتسليم أوراق الإجابة للمصححين والمراجعين"];
-    const content = `<div><div style="text-align: center; margin-bottom: 40px;"><img src="https://salogos.org/wp-content/uploads/2021/11/UntiTtled-1.png" style="height: 120px;"><h1 style="font-size: 32px; margin-top: 10px; color: #000; font-weight:900;">ملف الاختبارات</h1><h2 style="font-size: 18px; color: #555;">${settings.schoolName || data.school.name} - ${data.school.year}</h2></div><div style="border: 2px solid #208caa; border-radius: 15px; padding: 20px; background: #fcfcfc;"><h3 style="text-align: center; border-bottom: 2px dashed #ccc; padding-bottom: 15px; margin-bottom: 20px; color: #208caa;">محتويات الملف</h3><div style="display: flex; flex-wrap: wrap; direction: rtl;">${listItems.map(item => `<div style="width: 50%; padding: 10px; box-sizing: border-box; display: flex; align-items: center; font-size: 14px; font-weight: bold;"><span style="width: 20px; height: 20px; border: 2px solid #555; border-radius: 4px; display: inline-block; margin-left: 10px;"></span>${item}</div>`).join('')}</div></div><div style="text-align: center; margin-top: 50px; font-size: 12px; color: #888;">تم إصدار هذا الملف من نظام الكنترول المدرسي</div></div>`;
-    openPrintWindow(content, 'portrait');
-};
-export const printControlReceipt = (data: AppData, settings: PrintSettings) => {
-    // Legacy
-    // ... same as before
-    const stageCols = data.stages.length > 0 ? data.stages.map(s => `<th colspan="3">${s.name}</th>`).join('') : '<th colspan="3">الصف ........</th><th colspan="3">الصف ........</th>';
-    const stageSubCols = data.stages.length > 0 ? data.stages.map(() => `<th style="font-size:9px">الحضور</th><th style="font-size:9px">الغياب</th><th style="font-size:9px">المجموع</th>`).join('') : Array(2).fill(`<th style="font-size:9px">الحضور</th><th style="font-size:9px">الغياب</th><th style="font-size:9px">المجموع</th>`).join('');
-    let rows = '';
-    if (data.committees.length > 0) { data.committees.forEach(comm => { const cells = data.stages.length > 0 ? data.stages.map(() => `<td></td><td></td><td></td>`).join('') : Array(2).fill(`<td></td><td></td><td></td>`).join(''); rows += `<tr style="height: 35px;"><td style="font-weight:bold">${comm.name}</td><td>${comm.location}</td>${cells}<td></td><td></td></tr>`; }); } else { for(let i=1; i<=15; i++) { const cells = Array(data.stages.length || 2).fill(`<td></td><td></td><td></td>`).join(''); rows += `<tr style="height: 35px;"><td>${i}</td><td></td>${cells}<td></td><td></td></tr>`; } }
-    const content = `<div>${getHeaderHTML(data.school, settings)}<h2 style="text-align: center; color: #333; margin-bottom: 20px;">استلام الكنترول من الملاحظين</h2><div style="text-align: center; margin-bottom: 20px; font-weight: bold;">اليوم: ..................... الموافق: .... / .... / .... 14هـ &nbsp;&nbsp;&nbsp; الفترة: .....................</div><table><thead><tr><th rowspan="2" style="width: 50px;">اللجنة</th><th rowspan="2" style="width: 80px;">مقرها</th>${stageCols}<th rowspan="2" style="width: 100px;">التوقيع</th><th rowspan="2" style="width: 60px;">التوقيت</th></tr><tr>${stageSubCols}</tr></thead><tbody>${rows}</tbody></table>${getFooterHTML()}</div>`;
-    openPrintWindow(content, 'portrait');
-};
-export const printCorrectionTracking = (data: AppData, settings: PrintSettings) => {
-    // Legacy
-    let rows = ''; for(let i=0; i<12; i++) { rows += `<tr style="height: 45px;"><td></td><td></td><td><div style="display:flex; justify-content:space-between; padding:0 2px;"><span></span><span></span><span></span></div></td><td><div style="display:flex; justify-content:space-between; padding:0 2px;"><span></span><span></span><span></span></div></td><td><div style="display:flex; justify-content:space-between; padding:0 2px;"><span></span><span></span><span></span></div></td><td><div style="display:flex; justify-content:space-between; padding:0 2px;"><span></span><span></span><span></span></div></td><td></td></tr>`; }
-    const content = `<div>${getHeaderHTML(data.school, settings)}<h2 style="text-align: center; color: #333; margin-bottom: 20px;">المادة وتصحيحها ومراجعتها</h2><table><thead><tr><th rowspan="2" style="width: 100px;">اليوم والتاريخ</th><th rowspan="2">المادة</th><th style="width: 80px;">صححت</th><th style="width: 80px;">روجعت</th><th style="width: 80px;">دققت</th><th style="width: 80px;">رصدت</th><th rowspan="2" style="width: 150px;">ملاحظات</th></tr><tr><td style="font-size:9px; background:#f0f8ff;">1 | 2 | 3</td><td style="font-size:9px; background:#f0f8ff;">1 | 2 | 3</td><td style="font-size:9px; background:#f0f8ff;">1 | 2 | 3</td><td style="font-size:9px; background:#f0f8ff;">1 | 2 | 3</td></tr></thead><tbody>${rows}</tbody></table>${getFooterHTML()}</div>`;
-    openPrintWindow(content, 'portrait');
-};
-export const printAbsenceReport = (data: AppData, settings: PrintSettings) => {
-    printAbsenceRecord(data, settings, undefined);
-};
-export const printEnvelopeOpening = (data: AppData, settings: PrintSettings) => {
-    printQuestionEnvelopeOpening(data, settings, undefined);
-};
-export const printInvigilatorDistribution = (data: AppData, settings: PrintSettings) => {
-    let rows = ''; for(let i=1; i<=20; i++) { rows += `<tr style="height: 30px;"><td>${i}</td><td style="text-align: right; padding-right: 10px;"></td><td></td><td></td><td></td><td></td></tr>`; }
-    const content = `<div>${getHeaderHTML(data.school, settings)}<h2 style="text-align: center; color: #333; margin-bottom: 20px;">جدول توزيع الملاحظين</h2><div style="text-align: center; margin-bottom: 20px; font-weight: bold; display: flex; justify-content: center; gap: 30px;"><span>اليوم: ..........................</span><span>المادة: ..........................</span><span>التاريخ: ..... / ..... / 14هـ</span></div><table><thead><tr><th rowspan="2" style="width: 40px;">م</th><th rowspan="2">اسم الملاحظ</th><th colspan="2">الفترة الأولى</th><th colspan="2">الفترة الثانية</th></tr><tr><th style="width: 80px;">اللجنة</th><th style="width: 80px;">التوقيع</th><th style="width: 80px;">اللجنة</th><th style="width: 80px;">التوقيع</th></tr></thead><tbody>${rows}</tbody></table>${getFooterHTML()}</div>`;
-    openPrintWindow(content, 'portrait');
 };

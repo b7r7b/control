@@ -4,7 +4,6 @@ import {
   printDoorLabels, 
   printAttendance, 
   printSeatLabels,
-  // New Services
   printStudentCountsReport,
   printInvigilatorAttendance,
   printAbsenceRecord,
@@ -12,9 +11,15 @@ import {
   printQuestionEnvelope,
   printAnswerEnvelope,
   printAnswerPaperReceipt,
-  printExamPaperTracking
+  printExamPaperTracking,
+  printCommitteeData,
+  printUnassignedStudents,
+  printEmptyCommittees,
+  printDistributionByGrade,
+  printViolationMinutes,
+  printSubCommitteeTasks
 } from '../services/printService';
-import { Printer, Settings, FileText, Square, ChevronDown, ChevronUp, TableProperties, Image as ImageIcon, Eye, EyeOff, FileCheck, ClipboardList, FolderOpen, UserX, PenTool, MailOpen, Users, Edit3, X, Check, FileStack, BookOpen } from 'lucide-react';
+import { Printer, Settings, Eye, EyeOff, Edit3, X, Users, ClipboardList, UserX, MailOpen, FolderOpen, FileCheck, FileStack, BookOpen, AlertCircle, List, UserMinus, ShieldAlert, FileText, LayoutList } from 'lucide-react';
 
 interface PrintCenterProps {
   data: AppData;
@@ -44,12 +49,8 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data }) => {
   });
 
   const [activeReport, setActiveReport] = useState<DynamicReportConfig | null>(null);
-  
-  // Temporary state to hold teacher assignments for the print session
-  // Key: Committee ID (or index), Value: Teacher Name
   const [invigilatorAssignments, setInvigilatorAssignments] = useState<Record<string, string>>({});
 
-  // Sync school name if data changes
   useEffect(() => {
     if (data.school.name) {
         setSettings(prev => ({ ...prev, schoolName: data.school.name }));
@@ -62,16 +63,13 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data }) => {
 
   const inputClass = "w-full rounded-xl border-gray-300 bg-gray-50 p-3 text-sm focus:ring-2 focus:ring-primary focus:border-transparent transition outline-none";
 
-  // --- Dynamic Report Configuration Handlers ---
-
   const openReportConfig = (reportId: string, defaultTitle: string, defaultFields: {key: string, label: string}[]) => {
     setActiveReport({
       id: reportId,
       title: defaultTitle,
       fields: defaultFields.map(f => ({ ...f, visible: true }))
     });
-    // Reset Assignments when opening new report
-    if (reportId === 'invigilator_attendance') {
+    if (reportId === 'invigilator_attendance' || reportId === 'invigilator_daily_list') {
         setInvigilatorAssignments({});
     }
   };
@@ -99,135 +97,127 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data }) => {
   const handlePrintActiveReport = () => {
     if (!activeReport) return;
     
-    // Dispatch to specific print function based on ID
     switch (activeReport.id) {
-      case 'student_counts':
-        printStudentCountsReport(data, settings, activeReport);
-        break;
-      case 'invigilator_attendance':
-        printInvigilatorAttendance(data, settings, activeReport, invigilatorAssignments);
-        break;
-      case 'absence_record':
-        printAbsenceRecord(data, settings, activeReport);
-        break;
-      case 'question_envelope_opening':
-        printQuestionEnvelopeOpening(data, settings, activeReport);
-        break;
-      case 'question_envelope':
-        printQuestionEnvelope(data, settings, activeReport);
-        break;
-      case 'answer_envelope':
-        printAnswerEnvelope(data, settings, activeReport);
-        break;
-      case 'answer_paper_receipt':
-        printAnswerPaperReceipt(data, settings, activeReport);
-        break;
-      case 'exam_paper_tracking':
-        printExamPaperTracking(data, settings, activeReport);
-        break;
+      // Group 1
+      case 'student_counts': printStudentCountsReport(data, settings, activeReport); break;
+      case 'committee_data': printCommitteeData(data, settings); break;
+      case 'door_labels': printDoorLabels(data, settings); break;
+      case 'empty_committees': printEmptyCommittees(data, settings); break;
+      
+      // Group 2
+      case 'attendance': printAttendance(data, settings); break;
+      case 'unassigned_students': printUnassignedStudents(data, settings); break;
+      case 'distribution_by_grade': printDistributionByGrade(data, settings); break;
+      case 'distribution_by_committee': printStudentCountsReport(data, settings, activeReport); break; // Re-use logic for now or custom
+
+      // Group 3
+      case 'invigilator_distribution': printInvigilatorAttendance(data, settings, activeReport, invigilatorAssignments); break;
+      case 'invigilator_daily_list': printInvigilatorAttendance(data, settings, activeReport, invigilatorAssignments); break;
+
+      // Group 4
+      case 'answer_paper_receipt': printAnswerPaperReceipt(data, settings, activeReport); break;
+      case 'absence_daily': printAbsenceRecord(data, settings, activeReport); break; // Using single form logic for now
+      case 'exam_paper_tracking': printExamPaperTracking(data, settings, activeReport); break;
+      case 'question_envelope_opening': printQuestionEnvelopeOpening(data, settings, activeReport); break;
+      case 'violation_minutes': printViolationMinutes(data, settings); break;
+      case 'sub_committee_tasks': printSubCommitteeTasks(data, settings); break;
+      
+      // Stickers
+      case 'seat_labels': printSeatLabels(data, settings); break;
+      
+      // Envelopes (Added for completeness though separate in list)
+      case 'question_envelope': printQuestionEnvelope(data, settings, activeReport); break;
     }
   };
 
+  // Helper component for Report Buttons
+  const ReportBtn = ({ id, title, subtitle, icon: Icon, onClick, color = "blue" }: any) => {
+    const colors: Record<string, string> = {
+        blue: "bg-blue-100 text-blue-600 hover:bg-blue-600",
+        orange: "bg-orange-100 text-orange-600 hover:bg-orange-600",
+        green: "bg-green-100 text-green-600 hover:bg-green-600",
+        red: "bg-red-100 text-red-600 hover:bg-red-600",
+        purple: "bg-purple-100 text-purple-600 hover:bg-purple-600",
+    };
+    
+    return (
+        <button 
+            onClick={onClick}
+            className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-400 hover:shadow-md transition-all text-right group h-full"
+        >
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition ${colors[color]} group-hover:text-white`}>
+                <Icon className="w-5 h-5" />
+            </div>
+            <div>
+                <div className="font-bold text-gray-800 text-sm">{title}</div>
+                {subtitle && <div className="text-[10px] text-gray-400">{subtitle}</div>}
+            </div>
+        </button>
+    );
+  };
+
   return (
-    <div className="max-w-5xl mx-auto space-y-8 pb-10">
+    <div className="max-w-6xl mx-auto space-y-8 pb-10">
       
-      {/* Configuration Modal */}
+      {/* Config Modal */}
       {activeReport && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
             <div className="p-4 border-b flex justify-between items-center bg-gray-50">
               <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
                 <Edit3 className="w-5 h-5 text-primary" />
-                تخصيص النموذج
+                تجهيز النموذج: {activeReport.title}
               </h3>
-              <button onClick={() => setActiveReport(null)} className="text-gray-400 hover:text-red-500 transition">
-                <X className="w-6 h-6" />
-              </button>
+              <button onClick={() => setActiveReport(null)} className="text-gray-400 hover:text-red-500 transition"><X className="w-6 h-6" /></button>
             </div>
-            
             <div className="p-6 overflow-y-auto flex-1 space-y-6">
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">عنوان التقرير</label>
-                <input 
-                  type="text" 
-                  value={activeReport.title}
-                  onChange={(e) => setActiveReport({...activeReport, title: e.target.value})}
-                  className={inputClass}
-                />
+                <input type="text" value={activeReport.title} onChange={(e) => setActiveReport({...activeReport, title: e.target.value})} className={inputClass} />
               </div>
-
-              {/* Special Section: Teacher Assignment for Invigilator Report */}
-              {activeReport.id === 'invigilator_attendance' && (
+              
+              {(activeReport.id.includes('invigilator')) && (
                   <div className="bg-orange-50/50 rounded-xl p-4 border border-orange-100">
-                      <h4 className="text-sm font-bold text-orange-800 mb-4 flex items-center gap-2">
-                          <Users className="w-4 h-4" /> توزيع المعلمين على اللجان
-                      </h4>
+                      <h4 className="text-sm font-bold text-orange-800 mb-4 flex items-center gap-2"><Users className="w-4 h-4" /> توزيع المعلمين (للطباعة فقط)</h4>
                       <div className="max-h-48 overflow-y-auto pr-2 space-y-2">
-                        {data.committees.length > 0 ? data.committees.map((committee, idx) => (
+                        {data.committees.map((c, idx) => (
                              <div key={idx} className="flex items-center gap-2">
-                                <span className="bg-white border border-gray-200 px-3 py-2 rounded-lg text-xs font-bold w-24 text-center">لجنة {committee.name}</span>
-                                <select 
-                                    className="flex-1 rounded-lg border-gray-300 text-sm py-2"
-                                    value={invigilatorAssignments[committee.name] || ''}
-                                    onChange={(e) => handleInvigilatorAssignment(committee.name, e.target.value)}
-                                >
+                                <span className="bg-white border border-gray-200 px-3 py-2 rounded-lg text-xs font-bold w-24 text-center">لجنة {c.name}</span>
+                                <select className="flex-1 rounded-lg border-gray-300 text-sm py-2" value={invigilatorAssignments[c.name] || ''} onChange={(e) => handleInvigilatorAssignment(c.name, e.target.value)}>
                                     <option value="">-- اختر المعلم --</option>
-                                    {data.teachers && data.teachers.map((t, tIdx) => (
-                                        <option key={tIdx} value={t}>{t}</option>
-                                    ))}
+                                    {data.teachers && data.teachers.map((t, tIdx) => (<option key={tIdx} value={t.name}>{t.name}</option>))}
                                 </select>
                              </div>
-                        )) : (
-                            <div className="text-center text-xs text-gray-400">لا توجد لجان مضافة.</div>
-                        )}
+                        ))}
                       </div>
-                      {data.teachers.length === 0 && (
-                          <div className="mt-2 text-xs text-red-500">ملاحظة: لا يوجد معلمين في النظام. أضف معلمين في الخطوة الأولى لتظهر القائمة.</div>
-                      )}
                   </div>
               )}
 
-              <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-100">
-                <h4 className="text-sm font-bold text-blue-800 mb-4 flex items-center gap-2">
-                  <TableProperties className="w-4 h-4" /> الأعمدة والحقول
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {activeReport.fields.map((field) => (
-                    <div key={field.key} className={`flex items-center gap-2 p-2 rounded-lg border transition-all ${field.visible ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-200 opacity-60'}`}>
-                      <button 
-                        onClick={() => toggleFieldVisibility(field.key)}
-                        className={`p-1.5 rounded-md transition-colors ${field.visible ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-400'}`}
-                        title={field.visible ? 'إخفاء' : 'إظهار'}
-                      >
-                        {field.visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                      </button>
-                      <input 
-                        type="text" 
-                        value={field.label}
-                        onChange={(e) => updateFieldLabel(field.key, e.target.value)}
-                        disabled={!field.visible}
-                        className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-medium"
-                      />
+              {activeReport.fields.length > 0 && (
+                  <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-100">
+                    <h4 className="text-sm font-bold text-blue-800 mb-4">الأعمدة والحقول</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {activeReport.fields.map((field) => (
+                        <div key={field.key} className={`flex items-center gap-2 p-2 rounded-lg border transition-all ${field.visible ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-200 opacity-60'}`}>
+                          <button onClick={() => toggleFieldVisibility(field.key)} className={`p-1.5 rounded-md transition-colors ${field.visible ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-400'}`}>
+                            {field.visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                          </button>
+                          <input type="text" value={field.label} onChange={(e) => updateFieldLabel(field.key, e.target.value)} disabled={!field.visible} className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-medium" />
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
+              )}
             </div>
-
             <div className="p-4 border-t bg-gray-50 flex justify-end gap-3">
               <button onClick={() => setActiveReport(null)} className="px-5 py-2 rounded-xl text-gray-600 font-bold hover:bg-gray-200 transition">إلغاء</button>
-              <button 
-                onClick={handlePrintActiveReport}
-                className="px-6 py-2 rounded-xl bg-primary text-white font-bold hover:bg-[#1673a4] shadow-lg shadow-blue-200 transition flex items-center gap-2"
-              >
-                <Printer className="w-4 h-4" /> طباعة النموذج
-              </button>
+              <button onClick={handlePrintActiveReport} className="px-6 py-2 rounded-xl bg-primary text-white font-bold hover:bg-[#1673a4] shadow-lg shadow-blue-200 transition flex items-center gap-2"><Printer className="w-4 h-4" /> طباعة</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 1. Identity Settings */}
+      {/* Identity Settings */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
         <div className="flex items-center gap-2 mb-6 border-b pb-4">
           <Settings className="w-6 h-6 text-gray-500" />
@@ -236,172 +226,168 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="md:col-span-2">
             <label className="block text-sm font-bold text-gray-700 mb-2">اسم الإدارة التعليمية (الترويسة العلوية)</label>
-            <input type="text" value={settings.adminName} onChange={(e) => handleSettingChange('adminName', e.target.value)} className={inputClass} placeholder="مثال: الإدارة العامة للتعليم بمنطقة الرياض" />
+            <input type="text" value={settings.adminName} onChange={(e) => handleSettingChange('adminName', e.target.value)} className={inputClass} />
           </div>
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">اسم المدرسة (للتقارير)</label>
+            <label className="block text-sm font-bold text-gray-700 mb-2">اسم المدرسة</label>
             <input type="text" value={settings.schoolName} onChange={(e) => handleSettingChange('schoolName', e.target.value)} className={inputClass} />
           </div>
           <div>
-             <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2"><ImageIcon className="w-4 h-4" /> رابط الشعار (Logo URL)</label>
+             <label className="block text-sm font-bold text-gray-700 mb-2">رابط الشعار</label>
              <input type="text" value={settings.logoUrl} onChange={(e) => handleSettingChange('logoUrl', e.target.value)} className={`${inputClass} text-left dir-ltr`} />
           </div>
         </div>
       </div>
 
-      {/* 2. Main Student Reports (Legacy but kept for direct access) */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-bold text-gray-700 flex items-center gap-2">
-            <Printer className="w-5 h-5 text-primary" /> التقارير الأساسية (طباعة مباشرة)
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <button onClick={() => printDoorLabels(data, settings)} className="bg-white p-6 rounded-2xl border border-gray-200 hover:border-primary hover:shadow-lg transition-all group text-center flex flex-col items-center">
-              <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-primary mb-4"><Square className="w-7 h-7" /></div>
-              <h3 className="font-bold text-gray-800 mb-1">ملصقات الأبواب</h3>
-            </button>
-            <button onClick={() => printAttendance(data, settings)} className="bg-white p-6 rounded-2xl border border-gray-200 hover:border-secondary hover:shadow-lg transition-all group text-center flex flex-col items-center">
-              <div className="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center text-secondary mb-4"><FileText className="w-7 h-7" /></div>
-              <h3 className="font-bold text-gray-800 mb-1">كشوف المناداة</h3>
-            </button>
-            <button onClick={() => printSeatLabels(data, settings)} className="bg-white p-6 rounded-2xl border border-gray-200 hover:border-green-600 hover:shadow-lg transition-all group text-center flex flex-col items-center">
-              <div className="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center text-green-600 mb-4"><div className="grid grid-cols-2 gap-1 w-5 h-5"><div className="bg-current rounded-[1px]"></div><div className="bg-current rounded-[1px]"></div><div className="bg-current rounded-[1px]"></div><div className="bg-current rounded-[1px]"></div></div></div>
-              <h3 className="font-bold text-gray-800 mb-1">ملصقات الطاولات</h3>
-            </button>
-        </div>
-      </div>
-
-      {/* 3. NEW & Customized Administrative Forms */}
-      <div className="space-y-4 pt-6 border-t border-dashed border-gray-300">
-        <h3 className="text-lg font-bold text-gray-700 flex items-center gap-2">
-            <FileCheck className="w-5 h-5 text-orange-600" /> النماذج الإدارية الجديدة (قابلة للتخصيص)
-        </h3>
-        <p className="text-xs text-gray-500 mb-4">اضغط على النموذج لفتح خيارات التعديل (إخفاء أعمدة، تغيير مسميات) قبل الطباعة.</p>
+      <div className="space-y-8">
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-             {/* 1. Student Counts */}
-             <button 
-                onClick={() => openReportConfig('student_counts', 'أعداد الطلاب في اللجان', [
-                  {key: 'col_class', label: 'الصف'},
-                  {key: 'col_comm', label: 'رقم اللجنة'},
-                  {key: 'col_count', label: 'عدد الطلاب'},
-                ])}
-                className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all text-right group"
-            >
-                <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition"><Users className="w-5 h-5" /></div>
-                <div><div className="font-bold text-gray-800 text-sm">أعداد الطلاب في اللجان</div><div className="text-[10px] text-gray-400">إحصائية اللجان</div></div>
-            </button>
-
-            {/* 2. Invigilator Attendance */}
-            <button 
-                onClick={() => openReportConfig('invigilator_attendance', 'كشف بأسماء الملاحظين', [
-                  {key: 'col_comm_no', label: 'رقم اللجنة'},
-                  {key: 'col_comm_loc', label: 'مقر اللجنة'},
-                  {key: 'col_subject', label: 'المادة'},
-                  {key: 'col_time', label: 'زمن الاختبار'},
-                  {key: 'col_name', label: 'اسم الملاحظ'},
-                  {key: 'col_sign', label: 'التوقيع'},
-                ])}
-                className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all text-right group"
-            >
-                <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition"><ClipboardList className="w-5 h-5" /></div>
-                <div><div className="font-bold text-gray-800 text-sm">كشف الملاحظين</div><div className="text-[10px] text-gray-400">توزيع المراقبة</div></div>
-            </button>
-
-            {/* 3. Absence Record */}
-            <button 
-                onClick={() => openReportConfig('absence_record', 'محضر غياب طالب عن الاختبار', [
-                  {key: 'lbl_student', label: 'اسم الطالب'},
-                  {key: 'lbl_id', label: 'رقم الجلوس'},
-                  {key: 'lbl_comm', label: 'رقم اللجنة'},
-                  {key: 'lbl_subject', label: 'المادة'},
-                ])}
-                className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all text-right group"
-            >
-                <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition"><UserX className="w-5 h-5" /></div>
-                <div><div className="font-bold text-gray-800 text-sm">محضر غياب طالب</div><div className="text-[10px] text-gray-400">نموذج فردي</div></div>
-            </button>
-
-            {/* 4. Question Envelope Opening */}
-            <button 
-                onClick={() => openReportConfig('question_envelope_opening', 'محضر فتح مظروف أسئلة', [
-                  {key: 'lbl_subject', label: 'المادة'},
-                  {key: 'lbl_period', label: 'الفترة'},
-                  {key: 'lbl_status', label: 'حالة المظروف'},
-                  {key: 'col_name', label: 'الاسم'},
-                  {key: 'col_role', label: 'الصفة'},
-                ])}
-                className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all text-right group"
-            >
-                <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition"><MailOpen className="w-5 h-5" /></div>
-                <div><div className="font-bold text-gray-800 text-sm">محضر فتح مظاريف</div><div className="text-[10px] text-gray-400">لجنة فتح المظاريف</div></div>
-            </button>
-
-             {/* 5. Question Envelope */}
-             <button 
-                onClick={() => openReportConfig('question_envelope', 'مظروف أسئلة الطلاب', [
-                  {key: 'lbl_year', label: 'العام الدراسي'},
-                  {key: 'lbl_term', label: 'الفصل الدراسي'},
-                  {key: 'lbl_subject', label: 'المادة'},
-                  {key: 'lbl_count', label: 'عدد طلاب اللجنة'},
-                ])}
-                className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all text-right group"
-            >
-                <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition"><FolderOpen className="w-5 h-5" /></div>
-                <div><div className="font-bold text-gray-800 text-sm">مظروف الأسئلة</div><div className="text-[10px] text-gray-400">ملصق الظرف الخارجي</div></div>
-            </button>
-
-            {/* 6. Answer Envelope */}
-             <button 
-                onClick={() => openReportConfig('answer_envelope', 'مظروف أصل الإجابة النموذجية', [
-                  {key: 'lbl_year', label: 'العام الدراسي'},
-                  {key: 'lbl_term', label: 'الفصل الدراسي'},
-                  {key: 'lbl_type', label: 'نوع الأسئلة'},
-                  {key: 'lbl_teacher', label: 'اسم المعلم'},
-                ])}
-                className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all text-right group"
-            >
-                <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition"><FileCheck className="w-5 h-5" /></div>
-                <div><div className="font-bold text-gray-800 text-sm">مظروف الإجابة</div><div className="text-[10px] text-gray-400">للإجابة النموذجية</div></div>
-            </button>
-
-             {/* 7. Answer Paper Receipt (New) */}
-             <button 
-                onClick={() => openReportConfig('answer_paper_receipt', 'كشف استلام أوراق الإجابة', [
-                    {key: 'col_comm', label: 'رقم اللجنة'},
-                    {key: 'col_applicants', label: 'المتقدمون'},
-                    {key: 'col_present', label: 'الحاضرون'},
-                    {key: 'col_absent', label: 'الغائبون'},
-                    {key: 'col_total', label: 'المجموع'},
-                    {key: 'col_notes', label: 'ملاحظات'},
-                ])}
-                className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all text-right group"
-            >
-                <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition"><FileStack className="w-5 h-5" /></div>
-                <div><div className="font-bold text-gray-800 text-sm">كشف استلام أوراق</div><div className="text-[10px] text-gray-400">استلام الأجوبة من اللجان</div></div>
-            </button>
-
-            {/* 8. Exam Paper Tracking (New) */}
-            <button 
-                onClick={() => openReportConfig('exam_paper_tracking', 'متابعة تسليم واستلام الأسئلة', [
-                    {key: 'lbl_teacher', label: 'اسم المعلم'},
-                    {key: 'lbl_subject', label: 'المادة'},
-                    {key: 'lbl_grade', label: 'الصف / المستوى'},
-                    {key: 'lbl_track', label: 'المسار'},
-                    {key: 'lbl_assign_date', label: 'تاريخ استلام القرار'},
-                    {key: 'lbl_assign_sig', label: 'توقيع المعلم'},
-                    {key: 'lbl_env_q', label: 'مظروف أصل الأسئلة'},
-                    {key: 'lbl_env_a', label: 'مظروف أصل الإجابة'},
-                    {key: 'lbl_env_s', label: 'مظاريف أسئلة الطلاب'},
-                    {key: 'lbl_deliver_date', label: 'تاريخ التسليم'},
-                    {key: 'lbl_deliver_sig', label: 'التوقيع'},
-                ])}
-                className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all text-right group"
-            >
-                <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition"><BookOpen className="w-5 h-5" /></div>
-                <div><div className="font-bold text-gray-800 text-sm">متابعة تسليم الأسئلة</div><div className="text-[10px] text-gray-400">سجل تسليم المعلمين</div></div>
-            </button>
-
+        {/* Group 1: Committees & Students */}
+        <div>
+           <h3 className="text-lg font-bold text-gray-700 mb-4 flex items-center gap-2"><LayoutList className="w-5 h-5 text-blue-600" /> تقارير اللجان</h3>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <ReportBtn 
+                 title="بيان أعداد الطلاب" 
+                 subtitle="إحصائية عامة للجان" 
+                 icon={Users} 
+                 color="blue" 
+                 onClick={() => openReportConfig('student_counts', 'بيان بأعداد الطلاب في اللجان', [{key: 'col_class', label: 'الصف'}, {key: 'col_comm', label: 'رقم اللجنة'}, {key: 'col_count', label: 'عدد الطلاب'}])} 
+              />
+              <ReportBtn 
+                 title="بيانات اللجان" 
+                 subtitle="قائمة اللجان ومقارها" 
+                 icon={List} 
+                 color="blue" 
+                 onClick={() => openReportConfig('committee_data', 'بيانات اللجان', [])} 
+              />
+              <ReportBtn 
+                 title="ملصقات اللجان" 
+                 subtitle="تعريف بالأبواب" 
+                 icon={FileText} 
+                 color="blue" 
+                 onClick={() => openReportConfig('door_labels', settings.doorLabelTitle, [])} 
+              />
+              <ReportBtn 
+                 title="اللجان الفارغة" 
+                 subtitle="كشف اللجان الشاغرة" 
+                 icon={AlertCircle} 
+                 color="blue" 
+                 onClick={() => openReportConfig('empty_committees', 'كشف بأسماء اللجان الفارغة', [])} 
+              />
+           </div>
         </div>
+
+        {/* Group 2: Attendance & Distribution */}
+        <div>
+           <h3 className="text-lg font-bold text-gray-700 mb-4 flex items-center gap-2"><ClipboardList className="w-5 h-5 text-green-600" /> كشوف المناداة والتوزيع</h3>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <ReportBtn 
+                 title="كشف مناداة" 
+                 subtitle="قوائم التحضير" 
+                 icon={ClipboardList} 
+                 color="green" 
+                 onClick={() => openReportConfig('attendance', settings.attendanceTitle, [])} 
+              />
+              <ReportBtn 
+                 title="توزيع حسب الصفوف" 
+                 subtitle="التوزيع على اللجان" 
+                 icon={LayoutList} 
+                 color="green" 
+                 onClick={() => openReportConfig('distribution_by_grade', 'توزيع الطلاب حسب الصفوف', [])} 
+              />
+              <ReportBtn 
+                 title="توزيع حسب اللجنة" 
+                 subtitle="قوائم الطلاب باللجان" 
+                 icon={Users} 
+                 color="green" 
+                 onClick={() => openReportConfig('distribution_by_committee', 'توزيع الطلاب على اللجان', [{key: 'col_class', label: 'الصف'}, {key: 'col_comm', label: 'رقم اللجنة'}, {key: 'col_count', label: 'عدد الطلاب'}])} 
+              />
+              <ReportBtn 
+                 title="الطلاب غير المرتبطين" 
+                 subtitle="غير الموزعين" 
+                 icon={UserMinus} 
+                 color="green" 
+                 onClick={() => openReportConfig('unassigned_students', 'الطلاب غير المرتبطين بلجان', [])} 
+              />
+           </div>
+        </div>
+
+        {/* Group 3: Invigilators */}
+        <div>
+           <h3 className="text-lg font-bold text-gray-700 mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-orange-600" /> الملاحظين والمراقبة</h3>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <ReportBtn 
+                 title="توزيع الملاحظين" 
+                 subtitle="على اللجان" 
+                 icon={Users} 
+                 color="orange" 
+                 onClick={() => openReportConfig('invigilator_distribution', 'توزيع الملاحظين على اللجان', [{key: 'col_comm_no', label: 'رقم اللجنة'}, {key: 'col_name', label: 'اسم الملاحظ'}])} 
+              />
+              <ReportBtn 
+                 title="كشف الملاحظين اليومي" 
+                 subtitle="توقيع الحضور" 
+                 icon={ClipboardList} 
+                 color="orange" 
+                 onClick={() => openReportConfig('invigilator_daily_list', 'كشف الملاحظين اليومي', [{key: 'col_name', label: 'الاسم'}, {key: 'col_sign', label: 'التوقيع'}])} 
+              />
+              <ReportBtn 
+                 title="مهام اللجان الفرعية" 
+                 subtitle="تعليمات الملاحظين" 
+                 icon={FileText} 
+                 color="orange" 
+                 onClick={() => openReportConfig('sub_committee_tasks', 'مهام اللجان', [])} 
+              />
+           </div>
+        </div>
+
+        {/* Group 4: Admin Forms */}
+        <div>
+           <h3 className="text-lg font-bold text-gray-700 mb-4 flex items-center gap-2"><FileStack className="w-5 h-5 text-purple-600" /> النماذج الإدارية والمحاضر</h3>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <ReportBtn 
+                 title="استلام أوراق الإجابة" 
+                 subtitle="نموذج الاستلام" 
+                 icon={FileCheck} 
+                 color="purple" 
+                 onClick={() => openReportConfig('answer_paper_receipt', 'كشف استلام أوراق الإجابة', [{key: 'col_comm', label: 'رقم اللجنة'}, {key: 'col_applicants', label: 'المتقدمون'}, {key: 'col_total', label: 'المجموع'}])} 
+              />
+              <ReportBtn 
+                 title="الغياب اليومي" 
+                 subtitle="محضر غياب" 
+                 icon={UserX} 
+                 color="purple" 
+                 onClick={() => openReportConfig('absence_daily', 'كشف الغياب اليومي', [{key: 'lbl_student', label: 'الطالب'}, {key: 'lbl_id', label: 'رقم الجلوس'}])} 
+              />
+              <ReportBtn 
+                 title="متابعة أوراق الإجابة" 
+                 subtitle="سير الأوراق" 
+                 icon={BookOpen} 
+                 color="purple" 
+                 onClick={() => openReportConfig('exam_paper_tracking', 'متابعة سير أوراق الإجابة', [])} 
+              />
+               <ReportBtn 
+                 title="فتح المظاريف" 
+                 subtitle="محضر رسمي" 
+                 icon={MailOpen} 
+                 color="purple" 
+                 onClick={() => openReportConfig('question_envelope_opening', 'محضر فتح مظاريف الأسئلة', [])} 
+              />
+              <ReportBtn 
+                 title="مخالفة الأنظمة" 
+                 subtitle="محضر غش" 
+                 icon={ShieldAlert} 
+                 color="red" 
+                 onClick={() => openReportConfig('violation_minutes', 'محضر مخالفة', [])} 
+              />
+               <ReportBtn 
+                 title="مظروف الأسئلة" 
+                 subtitle="ملصق الظرف" 
+                 icon={FolderOpen} 
+                 color="purple" 
+                 onClick={() => openReportConfig('question_envelope', 'مظروف أسئلة الطلاب', [])} 
+              />
+           </div>
+        </div>
+
       </div>
       
     </div>

@@ -19,7 +19,7 @@ import {
   printViolationMinutes,
   printSubCommitteeTasks
 } from '../services/printService';
-import { Printer, Settings, Eye, EyeOff, Edit3, X, Users, ClipboardList, UserX, MailOpen, FolderOpen, FileCheck, FileStack, BookOpen, AlertCircle, List, UserMinus, ShieldAlert, FileText, LayoutList } from 'lucide-react';
+import { Printer, Settings, Eye, EyeOff, Edit3, X, Users, ClipboardList, UserX, MailOpen, FolderOpen, FileCheck, FileStack, BookOpen, AlertCircle, List, UserMinus, ShieldAlert, FileText, LayoutList, PenTool } from 'lucide-react';
 
 interface PrintCenterProps {
   data: AppData;
@@ -28,7 +28,9 @@ interface PrintCenterProps {
 const PrintCenter: React.FC<PrintCenterProps> = ({ data }) => {
   const [settings, setSettings] = useState<PrintSettings>({
     adminName: 'الإدارة العامة للتعليم بمحافظة جدة',
-    schoolName: data.school.name || '',
+    schoolName: data.school.name || 'ثانوية الأمير عبدالمجيد الأولى',
+    managerName: '',
+    agentName: '',
     logoUrl: 'https://salogos.org/wp-content/uploads/2021/11/UntiTtled-1.png',
     doorLabelTitle: 'بطاقة تعريف لجنة اختبار',
     attendanceTitle: 'كشف تحضير الطلاب',
@@ -127,6 +129,7 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data }) => {
       
       // Envelopes (Added for completeness though separate in list)
       case 'question_envelope': printQuestionEnvelope(data, settings, activeReport); break;
+      case 'answer_envelope': printAnswerEnvelope(data, settings, activeReport); break;
     }
   };
 
@@ -221,7 +224,7 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data }) => {
       <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
         <div className="flex items-center gap-2 mb-6 border-b pb-4">
           <Settings className="w-6 h-6 text-gray-500" />
-          <h2 className="text-xl font-bold text-gray-800">إعدادات الهوية والعناوين</h2>
+          <h2 className="text-xl font-bold text-gray-800">إعدادات الهوية والتواقيع</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="md:col-span-2">
@@ -235,6 +238,31 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data }) => {
           <div>
              <label className="block text-sm font-bold text-gray-700 mb-2">رابط الشعار</label>
              <input type="text" value={settings.logoUrl} onChange={(e) => handleSettingChange('logoUrl', e.target.value)} className={`${inputClass} text-left dir-ltr`} />
+          </div>
+          {/* Signatories Inputs */}
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                <PenTool className="w-4 h-4 text-primary" /> اسم مدير المدرسة (للتوقيع)
+            </label>
+            <input 
+                type="text" 
+                value={settings.managerName} 
+                onChange={(e) => handleSettingChange('managerName', e.target.value)} 
+                className={inputClass} 
+                placeholder="مثال: أ. محمد أحمد"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                <PenTool className="w-4 h-4 text-primary" /> اسم وكيل الشؤون التعليمية (للتوقيع)
+            </label>
+            <input 
+                type="text" 
+                value={settings.agentName} 
+                onChange={(e) => handleSettingChange('agentName', e.target.value)} 
+                className={inputClass} 
+                placeholder="مثال: أ. خالد علي"
+            />
           </div>
         </div>
       </div>
@@ -391,6 +419,13 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data }) => {
                  icon={FolderOpen} 
                  color="purple" 
                  onClick={() => openReportConfig('question_envelope', 'مظروف أسئلة الطلاب', [])} 
+              />
+              <ReportBtn 
+                 title="مظروف الإجابة" 
+                 subtitle="ملصق الظرف" 
+                 icon={FolderOpen} 
+                 color="purple" 
+                 onClick={() => openReportConfig('answer_envelope', 'مظروف أصل الإجابة', [])} 
               />
            </div>
         </div>

@@ -146,7 +146,7 @@ const App: React.FC = () => {
             <div className="flex flex-col items-center">
                 <img src="https://salogos.org/wp-content/uploads/2021/11/UntiTtled-1.png" className="h-20 object-contain mb-2" alt="Logo" />
                 <h1 className="text-2xl font-bold text-primary">المملكة العربية السعودية</h1>
-                <p className="text-lg text-secondary font-medium">وزارة التعليم - نظام الكنترول</p>
+                <p className="text-lg text-secondary font-medium">وزارة التعليم - ثانوية الأمير عبدالمجيد الأولى</p>
             </div>
             
             <div className="w-full max-w-md h-1.5 rounded-full bg-gradient-to-r from-primary via-secondary to-accent opacity-80"></div>
@@ -355,8 +355,8 @@ const App: React.FC = () => {
         </main>
       </div>
       
-      <div className="text-center mt-6 text-gray-400 text-xs">
-         تم التطوير باستخدام أحدث تقنيات الويب
+      <div className="text-center mt-6 text-gray-500 text-sm font-bold">
+         تصميم الأستاذ عبدالله علي الشهري
       </div>
     </div>
   );

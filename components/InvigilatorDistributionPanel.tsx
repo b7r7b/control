@@ -18,6 +18,7 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
   const [teachersPerComm, setTeachersPerComm] = useState(1);
   const [schedule, setSchedule] = useState<ExamSchedule | null>(data.schedule || null);
   const [activeDayIdx, setActiveDayIdx] = useState(0);
+  const [startDate, setStartDate] = useState('');
 
   // Teacher Management State
   const [showTeacherManager, setShowTeacherManager] = useState(true);
@@ -88,6 +89,19 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
     }
     return usage;
   }, [schedule, data.teachers]);
+
+  // --- Date Helper ---
+  const getDayLabel = (dayIndex: number) => {
+      if (!startDate) {
+          return { name: `اليوم ${dayIndex + 1}`, date: '' };
+      }
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + dayIndex);
+      return {
+          name: date.toLocaleDateString('ar-SA', { weekday: 'long' }),
+          date: date.toLocaleDateString('ar-SA', { day: 'numeric', month: 'numeric', year: 'numeric' }) // Using numeric/gregorian for simplicity, usually prefer Hijri in SA context but input is Greg
+      };
+  };
 
   // --- Auto Send Effect ---
   useEffect(() => {
@@ -349,64 +363,65 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
     let htmlContent = '';
 
     daysToPrint.forEach((day, dIdx) => {
-        // Iterate over periods to create separate pages/tables per period
+        const actualDayIndex = specificDayIdx !== null ? specificDayIdx : dIdx;
+        const dayInfo = getDayLabel(actualDayIndex);
+        
+        // Header HTML (Once per page)
+        const headerHtml = `
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 5px; margin-bottom: 10px; direction: rtl;">
+            <div style="text-align: right; width: 30%; font-size: 10px; line-height: 1.3; font-weight: 800; color: #000;">
+                <div>المملكة العربية السعودية</div>
+                <div>وزارة التعليم</div>
+                <div>إدارة التعليم</div>
+            </div>
+            <div style="text-align: center; width: 40%; display: flex; flex-direction: column; align-items: center;">
+                <img src="https://salogos.org/wp-content/uploads/2021/11/UntiTtled-1.png" style="height: 50px; object-fit: contain; margin-bottom: 3px; filter: grayscale(100%) contrast(120%);" alt="Logo">
+                <div style="font-size: 13px; font-weight: 900; text-decoration: underline; margin-top: 2px;">${data.school.name}</div>
+            </div>
+            <div style="text-align: left; width: 30%; font-size: 10px; line-height: 1.3; font-weight: 800; color: #000;">
+                <div>${data.school.term}</div>
+                <div>${data.school.year}</div>
+            </div>
+            </div>
+        `;
+
+        // Start Page
+        let pageHtml = `
+            <div style="page-break-after: always; direction: rtl; font-family: 'Tajawal', sans-serif;">
+                ${headerHtml}
+                <h2 style="text-align: center; margin-bottom: 10px; font-weight: 900; font-size: 16px;">توزيع الملاحظين على اللجان</h2>
+                
+                <!-- Day/Date Header Table -->
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 5px; border: 2px solid #000; text-align: center; font-size: 12px;">
+                    <tr style="background-color: #eee;">
+                        <td style="border: 1px solid #000; padding: 5px; font-weight: 900; width: 10%;">اليوم</td>
+                        <td style="border: 1px solid #000; padding: 5px; width: 40%;">${dayInfo.name}</td>
+                        <td style="border: 1px solid #000; padding: 5px; font-weight: 900; width: 10%;">التاريخ</td>
+                        <td style="border: 1px solid #000; padding: 5px; width: 40%;">${dayInfo.date || '....................'}</td>
+                    </tr>
+                </table>
+        `;
+
+        // Iterate periods and append them to the same page
         day.periods.forEach((period, pIdx) => {
-            const actualDayIndex = specificDayIdx !== null ? specificDayIdx : dIdx;
+            const periodName = pIdx === 0 ? 'الأولى' : pIdx === 1 ? 'الثانية' : 'الثالثة';
             
-            // Header HTML
-            const headerHtml = `
-              <div style="display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 5px; margin-bottom: 10px; direction: rtl;">
-                <div style="text-align: right; width: 30%; font-size: 10px; line-height: 1.3; font-weight: 800; color: #000;">
-                  <div>المملكة العربية السعودية</div>
-                  <div>وزارة التعليم</div>
-                  <div>إدارة التعليم</div>
-                </div>
-                <div style="text-align: center; width: 40%; display: flex; flex-direction: column; align-items: center;">
-                  <img src="https://salogos.org/wp-content/uploads/2021/11/UntiTtled-1.png" style="height: 50px; object-fit: contain; margin-bottom: 3px; filter: grayscale(100%) contrast(120%);" alt="Logo">
-                  <div style="font-size: 13px; font-weight: 900; text-decoration: underline; margin-top: 2px;">${data.school.name}</div>
-                </div>
-                <div style="text-align: left; width: 30%; font-size: 10px; line-height: 1.3; font-weight: 800; color: #000;">
-                   <div>${data.school.term}</div>
-                   <div>${data.school.year}</div>
-                </div>
-              </div>
-            `;
-
-            let pageHtml = `
-                <div style="page-break-after: always; direction: rtl; font-family: 'Tajawal', sans-serif;">
-                    ${headerHtml}
-                    <h2 style="text-align: center; margin-bottom: 10px; font-weight: 900; font-size: 16px;">توزيع الملاحظين على اللجان</h2>
-                    
-                    <!-- Day/Date/Period Header Table -->
-                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 5px; border: 2px solid #000; text-align: center; font-size: 12px;">
-                        <tr style="background-color: #eee;">
-                            <td style="border: 1px solid #000; padding: 5px; font-weight: 900; width: 10%;">اليوم</td>
-                            <td style="border: 1px solid #000; padding: 5px; width: 23%;">${actualDayIndex + 1}</td>
-                            <td style="border: 1px solid #000; padding: 5px; font-weight: 900; width: 10%;">التاريخ</td>
-                            <td style="border: 1px solid #000; padding: 5px; width: 23%;">....................</td>
-                            <td style="border: 1px solid #000; padding: 5px; font-weight: 900; width: 10%;">الفترة</td>
-                            <td style="border: 1px solid #000; padding: 5px; width: 23%;">
-                               ${pIdx === 0 ? 'الأولى' : pIdx === 1 ? 'الثانية' : 'الثالثة'}
-                            </td>
-                        </tr>
-                    </table>
-
-                    <!-- Main Data Table -->
-                    <table style="width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 11px; text-align: center; border: 2px solid #000;">
+            pageHtml += `
+                <div style="margin-top: 15px; border: 1px solid #000; padding: 5px; background: #fafafa;">
+                   <h3 style="margin: 0 0 5px 0; font-size: 12px; font-weight: 900; text-align: center; border-bottom: 1px solid #ccc; padding-bottom: 3px;">الفترة: ${periodName}</h3>
+                   <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: center; border: 1px solid #000;">
                         <thead>
                             <tr style="background-color: #f0f0f0;">
-                                <th style="border: 1px solid #000; padding: 5px; width: 50px;">رقم اللجنة</th>
-                                <th style="border: 1px solid #000; padding: 5px;">مقر اللجنة</th>
-                                <th style="border: 1px solid #000; padding: 5px; width: 15%;">المادة</th>
-                                <th style="border: 1px solid #000; padding: 5px; width: 10%;">زمن الاختبار</th>
-                                <th style="border: 1px solid #000; padding: 5px; width: 25%;">اسم الملاحظ</th>
-                                <th style="border: 1px solid #000; padding: 5px; width: 10%;">التوقيع</th>
+                                <th style="border: 1px solid #000; padding: 3px; width: 50px;">رقم اللجنة</th>
+                                <th style="border: 1px solid #000; padding: 3px;">مقر اللجنة</th>
+                                <th style="border: 1px solid #000; padding: 3px; width: 40%;">اسم الملاحظ</th>
+                                <th style="border: 1px solid #000; padding: 3px; width: 15%;">التوقيع</th>
                             </tr>
                         </thead>
                         <tbody>
             `;
 
-            // 1. Print Committees
+            // Print Committees for this Period
             data.committees.forEach((comm, cIdx) => {
                 const teachers = [];
                 for(let k=0; k<schedule.teachersPerCommittee; k++) {
@@ -416,37 +431,34 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
                 const teacherCell = teachers.length > 0 ? teachers.join(' - ') : '';
 
                 pageHtml += `
-                    <tr style="height: 30px;">
+                    <tr style="height: 25px;">
                         <td style="border: 1px solid #000; padding: 2px; font-weight: bold;">${comm.name}</td>
                         <td style="border: 1px solid #000; padding: 2px;">${comm.location}</td>
-                        <td style="border: 1px solid #000; padding: 2px;"></td> <!-- Subject Empty -->
-                        <td style="border: 1px solid #000; padding: 2px;"></td> <!-- Time Empty -->
                         <td style="border: 1px solid #000; padding: 2px; font-weight: bold;">${teacherCell}</td>
-                        <td style="border: 1px solid #000; padding: 2px;"></td> <!-- Sign Empty -->
+                        <td style="border: 1px solid #000; padding: 2px;"></td>
                     </tr>
                 `;
             });
 
-            // 2. Print Reserves
+            // Print Reserves for this Period
             if (period.reserves.length > 0) {
                  period.reserves.forEach((res, rIdx) => {
                      pageHtml += `
-                        <tr style="height: 30px; background-color: #fffde7;">
+                        <tr style="height: 25px; background-color: #fffde7;">
                             <td style="border: 1px solid #000; padding: 2px; font-weight: bold;">احتياط</td>
                             <td style="border: 1px solid #000; padding: 2px;">-</td>
-                            <td style="border: 1px solid #000; padding: 2px;"></td>
-                            <td style="border: 1px solid #000; padding: 2px;"></td>
                             <td style="border: 1px solid #000; padding: 2px;">${res}</td>
                             <td style="border: 1px solid #000; padding: 2px;"></td>
                         </tr>
                      `;
                  });
             } else {
-                 // Add empty rows if no reserves just to fill space if needed or show at least one empty
                  pageHtml += `
-                    <tr style="height: 30px; background-color: #fffde7;">
+                    <tr style="height: 25px; background-color: #fffde7;">
                         <td style="border: 1px solid #000; padding: 2px; font-weight: bold;">احتياط</td>
-                        <td colspan="5" style="border: 1px solid #000; padding: 2px;"></td>
+                        <td style="border: 1px solid #000; padding: 2px;">-</td>
+                        <td style="border: 1px solid #000; padding: 2px;"></td>
+                        <td style="border: 1px solid #000; padding: 2px;"></td>
                     </tr>
                  `;
             }
@@ -454,25 +466,29 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
             pageHtml += `
                         </tbody>
                     </table>
-                    
-                    <div style="margin-top: 30px; display: flex; justify-content: space-between; font-weight: 800; font-size: 12px; padding: 0 20px;">
-                        <div style="text-align: center;">
-                            <div>مسؤول الجدول</div>
-                            <div style="margin-top: 25px;">..........................</div>
-                        </div>
-                        <div style="text-align: center;">
-                            <div>وكيل الشؤون التعليمية</div>
-                            <div style="margin-top: 25px;">..........................</div>
-                        </div>
-                        <div style="text-align: center;">
-                            <div>مدير المدرسة</div>
-                            <div style="margin-top: 25px;">..........................</div>
-                        </div>
-                    </div>
                 </div>
             `;
-            htmlContent += pageHtml;
-        });
+        }); // End Periods Loop
+
+        // Footer
+        pageHtml += `
+                <div style="margin-top: 30px; display: flex; justify-content: space-between; font-weight: 800; font-size: 12px; padding: 0 20px;">
+                    <div style="text-align: center;">
+                        <div>مسؤول الجدول</div>
+                        <div style="margin-top: 25px;">..........................</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div>وكيل الشؤون التعليمية</div>
+                        <div style="margin-top: 25px;">..........................</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div>مدير المدرسة</div>
+                        <div style="margin-top: 25px;">..........................</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        htmlContent += pageHtml;
     });
 
     const w = window.open('', '_blank');
@@ -499,11 +515,12 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
 
   const generateWhatsAppMessage = (teacher: Teacher, dayIdx: number) => {
     if (!schedule) return '';
-    const day = schedule.days[dayIdx];
-    const dayName = `اليوم ${dayIdx + 1}`;
+    const dayInfo = getDayLabel(dayIdx);
+    const dayName = dayInfo.name;
+    
     let tasks: string[] = [];
     
-    day.periods.forEach((p, pIdx) => {
+    schedule.days[dayIdx].periods.forEach((p, pIdx) => {
         // Check Main
         p.main.forEach((assignedName, idx) => {
             if (assignedName === teacher.name) {
@@ -521,7 +538,7 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
     if (tasks.length === 0) return '';
 
     return `السلام عليكم أ. ${teacher.name}
-إليك جدول الملاحظة الخاص بك لـ *${dayName}*:
+إليك جدول الملاحظة الخاص بك لـ *${dayName}* ${dayInfo.date ? `(${dayInfo.date})` : ''}:
 
 ${tasks.join('\n')}
 
@@ -615,19 +632,22 @@ ${tasks.join('\n')}
                      <div className="flex items-center gap-4">
                         <span className="font-bold text-gray-700 text-sm">حدد اليوم للإرسال:</span>
                         <div className="flex gap-2">
-                            {schedule.days.map((d, idx) => (
-                                <button
-                                    key={idx}
-                                    onClick={() => { setWhatsAppTargetDay(idx); stopAutoSend(); }}
-                                    className={`px-4 py-1.5 rounded-lg text-sm font-bold border transition ${
-                                        whatsAppTargetDay === idx 
-                                        ? 'bg-green-600 text-white border-green-600 shadow-md' 
-                                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                                    }`}
-                                >
-                                    اليوم {idx + 1}
-                                </button>
-                            ))}
+                            {schedule.days.map((d, idx) => {
+                                const dayInfo = getDayLabel(idx);
+                                return (
+                                    <button
+                                        key={idx}
+                                        onClick={() => { setWhatsAppTargetDay(idx); stopAutoSend(); }}
+                                        className={`px-4 py-1.5 rounded-lg text-sm font-bold border transition ${
+                                            whatsAppTargetDay === idx 
+                                            ? 'bg-green-600 text-white border-green-600 shadow-md' 
+                                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        {dayInfo.name}
+                                    </button>
+                                );
+                            })}
                         </div>
                      </div>
                      
@@ -801,18 +821,30 @@ ${tasks.join('\n')}
       <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-6 md:items-end">
         
         {/* Basic Settings */}
-        <div className="flex gap-4 items-end">
-            <div>
-               <label className="block text-xs font-bold text-gray-500 mb-1">عدد الأيام</label>
-               <input type="number" min="1" max="20" value={numDays} onChange={(e) => setNumDays(Number(e.target.value))} className="w-20 rounded-lg border-gray-300 bg-gray-50 p-2 text-sm font-bold text-center" />
+        <div className="flex flex-col gap-2">
+            <div className="flex gap-4 items-end">
+                <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">عدد الأيام</label>
+                <input type="number" min="1" max="20" value={numDays} onChange={(e) => setNumDays(Number(e.target.value))} className="w-20 rounded-lg border-gray-300 bg-gray-50 p-2 text-sm font-bold text-center" />
+                </div>
+                
+                <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">ملاحظين بكل لجنة</label>
+                <select value={teachersPerComm} onChange={(e) => setTeachersPerComm(Number(e.target.value))} className="w-24 rounded-lg border-gray-300 bg-gray-50 p-2 text-sm font-bold">
+                    <option value="1">1 ملاحظ</option>
+                    <option value="2">2 ملاحظين</option>
+                </select>
+                </div>
             </div>
-            
+            {/* Start Date Input */}
             <div>
-               <label className="block text-xs font-bold text-gray-500 mb-1">ملاحظين بكل لجنة</label>
-               <select value={teachersPerComm} onChange={(e) => setTeachersPerComm(Number(e.target.value))} className="w-24 rounded-lg border-gray-300 bg-gray-50 p-2 text-sm font-bold">
-                 <option value="1">1 ملاحظ</option>
-                 <option value="2">2 ملاحظين</option>
-               </select>
+                 <label className="block text-xs font-bold text-gray-500 mb-1">تاريخ بداية الاختبارات</label>
+                 <input 
+                    type="date" 
+                    value={startDate} 
+                    onChange={(e) => setStartDate(e.target.value)} 
+                    className="w-full rounded-lg border-gray-300 bg-gray-50 p-2 text-sm font-bold text-center" 
+                 />
             </div>
         </div>
 
@@ -822,22 +854,25 @@ ${tasks.join('\n')}
                 <Clock className="w-3 h-3" /> تخصيص الفترات لكل يوم (اضغط لتغيير العدد)
              </label>
              <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
-                {periodsPerDay.map((count, idx) => (
-                    <button 
-                        key={idx} 
-                        onClick={() => togglePeriodCount(idx)}
-                        className={`
-                            flex-shrink-0 flex flex-col items-center justify-center w-12 h-10 rounded-lg border text-xs transition-all
-                            ${count === 1 ? 'bg-white border-gray-200 text-gray-600' : ''}
-                            ${count === 2 ? 'bg-blue-100 border-blue-300 text-blue-700 font-bold' : ''}
-                            ${count === 3 ? 'bg-purple-100 border-purple-300 text-purple-700 font-bold' : ''}
-                        `}
-                        title={`اليوم ${idx+1}: ${count} فترات`}
-                    >
-                        <span className="text-[9px] opacity-70">يوم {idx + 1}</span>
-                        <span className="font-black text-sm leading-none">{count}</span>
-                    </button>
-                ))}
+                {periodsPerDay.map((count, idx) => {
+                    const dayInfo = getDayLabel(idx);
+                    return (
+                        <button 
+                            key={idx} 
+                            onClick={() => togglePeriodCount(idx)}
+                            className={`
+                                flex-shrink-0 flex flex-col items-center justify-center min-w-[3rem] h-10 rounded-lg border text-xs transition-all px-1
+                                ${count === 1 ? 'bg-white border-gray-200 text-gray-600' : ''}
+                                ${count === 2 ? 'bg-blue-100 border-blue-300 text-blue-700 font-bold' : ''}
+                                ${count === 3 ? 'bg-purple-100 border-purple-300 text-purple-700 font-bold' : ''}
+                            `}
+                            title={`${dayInfo.name}: ${count} فترات`}
+                        >
+                            <span className="text-[9px] opacity-70 whitespace-nowrap">{dayInfo.name.split(' ').pop()}</span>
+                            <span className="font-black text-sm leading-none">{count}</span>
+                        </button>
+                    );
+                })}
              </div>
         </div>
         
@@ -883,27 +918,30 @@ ${tasks.join('\n')}
                 <>
                     {/* Day Tabs */}
                     <div className="flex gap-2 overflow-x-auto pb-2">
-                        {schedule.days.map((d, idx) => (
-                            <button
-                                key={idx}
-                                onClick={() => setActiveDayIdx(idx)}
-                                className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${
-                                    activeDayIdx === idx 
-                                    ? 'bg-primary text-white shadow-md' 
-                                    : 'bg-white text-gray-500 hover:bg-gray-50'
-                                }`}
-                            >
-                                اليوم {idx + 1}
-                                <span className="mr-2 text-[10px] opacity-70 bg-black/20 px-1.5 rounded-full">{d.periods.length} فترات</span>
-                            </button>
-                        ))}
+                        {schedule.days.map((d, idx) => {
+                            const dayInfo = getDayLabel(idx);
+                            return (
+                                <button
+                                    key={idx}
+                                    onClick={() => setActiveDayIdx(idx)}
+                                    className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all flex flex-col items-center ${
+                                        activeDayIdx === idx 
+                                        ? 'bg-primary text-white shadow-md' 
+                                        : 'bg-white text-gray-500 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <span>{dayInfo.name}</span>
+                                    {dayInfo.date && <span className="text-[9px] opacity-80 font-mono">{dayInfo.date}</span>}
+                                </button>
+                            );
+                        })}
                     </div>
 
                     {/* Schedule Table */}
                     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                         <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
                              <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                                <Calendar className="w-5 h-5 text-primary" /> جدول توزيع اليوم {activeDayIdx + 1}
+                                <Calendar className="w-5 h-5 text-primary" /> جدول توزيع {getDayLabel(activeDayIdx).name}
                              </h3>
                              <div className="text-xs text-gray-400">
                                 يتم الحفظ تلقائياً عند التعديل

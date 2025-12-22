@@ -60,7 +60,12 @@ export interface AppData {
 
 export interface PrintSettings {
   adminName: string;
-  schoolName: string; 
+  schoolName: string;
+  
+  // New Fields for Signatures
+  managerName: string;
+  agentName: string;
+
   logoUrl: string;
   doorLabelTitle: string;
   attendanceTitle: string;

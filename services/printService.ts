@@ -99,25 +99,13 @@ const openPrintWindow = (content: string, orientation: 'portrait' | 'landscape' 
           .sticker-sheet {
              width: 210mm;
              height: 297mm;
-             
-             /* 
-                === إعدادات الهوامش العلوية (هام جداً) ===
-                القياسي هو 15.1mm.
-                اذا كانت الطباعة منخفضة (تخرج عن الملصق من الأسفل)، قلل هذا الرقم (مثلاً اجعله 10mm أو 12mm).
-                اذا كانت الطباعة مرتفعة جداً (تخرج عن الملصق من الأعلى)، زد هذا الرقم (مثلاً اجعله 20mm).
-             */
              padding-top: 12.0mm; 
-             
              padding-left: 7.2mm; 
              padding-right: 7.2mm; 
-             
              box-sizing: border-box;
              display: grid;
-             /* 3 Columns of 63.5mm */
              grid-template-columns: 63.5mm 63.5mm 63.5mm;
-             /* 7 Rows of 38.1mm */
              grid-template-rows: repeat(7, 38.1mm);
-             /* Horizontal Gap 2.5mm */
              column-gap: 2.5mm;
              row-gap: 0mm;
              page-break-after: always;
@@ -135,8 +123,6 @@ const openPrintWindow = (content: string, orientation: 'portrait' | 'landscape' 
              justify-content: space-between;
              text-align: center;
              background: white;
-             /* حدود وهمية للمساعدة في المعاينة - لا تظهر في الطباعة عادة إذا كانت خفيفة */
-             /* border: 1px dashed #eee; */
           }
           
           /* Warning message for print settings */
@@ -235,6 +221,17 @@ export const printStudentCountsReport = (data: AppData, settings: PrintSettings,
       <div style="border: 2px solid #000;">
          ${gridContent}
       </div>
+      
+      <div style="margin-top: 40px; display: flex; justify-content: space-between; font-weight: 800; font-size: 11px; text-align: center; padding: 0 40px;">
+            <div style="width: 30%;">
+                <div>وكيل الشؤون التعليمية</div>
+                <div style="margin-top: 25px;">${settings.agentName || '..........................'}</div>
+            </div>
+            <div style="width: 30%;">
+                <div>مدير المدرسة</div>
+                <div style="margin-top: 25px;">${settings.managerName || '..........................'}</div>
+            </div>
+      </div>
     </div>
   `;
   openPrintWindow(content, 'portrait');
@@ -274,6 +271,16 @@ export const printCommitteeData = (data: AppData, settings: PrintSettings) => {
         </thead>
         <tbody>${rows}</tbody>
       </table>
+      <div style="margin-top: 40px; display: flex; justify-content: space-between; font-weight: 800; font-size: 11px; text-align: center; padding: 0 40px;">
+            <div style="width: 30%;">
+                <div>وكيل الشؤون التعليمية</div>
+                <div style="margin-top: 25px;">${settings.agentName || '..........................'}</div>
+            </div>
+            <div style="width: 30%;">
+                <div>مدير المدرسة</div>
+                <div style="margin-top: 25px;">${settings.managerName || '..........................'}</div>
+            </div>
+      </div>
     </div>
     `;
     openPrintWindow(content, 'portrait');
@@ -297,10 +304,8 @@ export const printDoorLabels = (data: AppData, settings: PrintSettings) => {
     openPrintWindow(html, 'portrait');
 };
 
-// REVERTED: Print Attendance Grouped by Stage
 export const printAttendance = (data: AppData, settings: PrintSettings) => {
   let html = '';
-  // Track cursor per stage to know which student we are on
   const cursors: Record<number, number> = {};
   data.stages.forEach(s => cursors[s.id] = 0);
 
@@ -309,7 +314,6 @@ export const printAttendance = (data: AppData, settings: PrintSettings) => {
     let sn = 1;
     let hasStudents = false;
     
-    // Iterate stages sequentially
     data.stages.forEach(stage => {
         const count = committee.counts[stage.id] || 0;
         if (count > 0) {
@@ -327,24 +331,22 @@ export const printAttendance = (data: AppData, settings: PrintSettings) => {
 
     if (!hasStudents) return;
 
-    const pageContent = `<div>${getHeaderHTML(data.school, settings)}<div style="text-align: center; margin: 10px 0 15px 0; border-bottom: 1px solid #eee; padding-bottom: 5px;"><h2 style="margin: 0; color: #208caa; font-size: 18px;">${settings.attendanceTitle}</h2><div style="display: flex; justify-content: center; gap: 20px; margin-top: 5px; font-size: 14px; font-weight: 800;"><span>اللجنة: ${committee.name}</span><span>|</span><span>المقر: ${committee.location || '___'}</span></div></div><table><thead><tr>${settings.showColSequence ? `<th style="width: 30px;">${settings.colSequence}</th>` : ''}${settings.showColSeatId ? `<th style="width: 80px;">${settings.colSeatId}</th>` : ''}${settings.showColName ? `<th>${settings.colName}</th>` : ''}${settings.showColStage ? `<th style="width: 100px;">${settings.colStage}</th>` : ''}${settings.showColPresence ? `<th style="width: 60px;">${settings.colPresence}</th>` : ''}${settings.showColSignature ? `<th style="width: 100px;">${settings.colSignature}</th>` : ''}</tr></thead><tbody>${rows}</tbody></table><div style="margin-top: 40px; display: flex; justify-content: space-between; font-weight: 800; font-size: 11px; text-align: center;"><div style="width: 30%;"><div>الملاحظ الأول</div><div style="margin-top: 20px;">..........................</div></div><div style="width: 30%;"><div>الملاحظ الثاني</div><div style="margin-top: 20px;">..........................</div></div><div style="width: 30%;"><div>مدير المدرسة</div><div style="margin-top: 20px;">..........................</div></div></div></div>`;
+    const pageContent = `<div>${getHeaderHTML(data.school, settings)}<div style="text-align: center; margin: 10px 0 15px 0; border-bottom: 1px solid #eee; padding-bottom: 5px;"><h2 style="margin: 0; color: #208caa; font-size: 18px;">${settings.attendanceTitle}</h2><div style="display: flex; justify-content: center; gap: 20px; margin-top: 5px; font-size: 14px; font-weight: 800;"><span>اللجنة: ${committee.name}</span><span>|</span><span>المقر: ${committee.location || '___'}</span></div></div><table><thead><tr>${settings.showColSequence ? `<th style="width: 30px;">${settings.colSequence}</th>` : ''}${settings.showColSeatId ? `<th style="width: 80px;">${settings.colSeatId}</th>` : ''}${settings.showColName ? `<th>${settings.colName}</th>` : ''}${settings.showColStage ? `<th style="width: 100px;">${settings.colStage}</th>` : ''}${settings.showColPresence ? `<th style="width: 60px;">${settings.colPresence}</th>` : ''}${settings.showColSignature ? `<th style="width: 100px;">${settings.colSignature}</th>` : ''}</tr></thead><tbody>${rows}</tbody></table><div style="margin-top: 40px; display: flex; justify-content: space-between; font-weight: 800; font-size: 11px; text-align: center;"><div style="width: 30%;"><div>الملاحظ الأول</div><div style="margin-top: 20px;">..........................</div></div><div style="width: 30%;"><div>الملاحظ الثاني</div><div style="margin-top: 20px;">..........................</div></div><div style="width: 30%;"><div>مدير المدرسة</div><div style="margin-top: 20px;">${settings.managerName || '..........................'}</div></div></div></div>`;
     html += `<div class="page-break">${pageContent}</div>`;
   });
   openPrintWindow(html, 'portrait');
 };
 
-// UPDATED: Seat Labels - CLASSIC LAYOUT (Logo + Text)
 export const printSeatLabels = (data: AppData, settings: PrintSettings) => {
   const cursors: Record<number, number> = {};
   data.stages.forEach(s => cursors[s.id] = 0);
   
   let html = '';
-  const ITEMS_PER_PAGE = 21; // 3 columns * 7 rows
+  const ITEMS_PER_PAGE = 21; 
   
   data.committees.forEach(committee => {
     const committeeStickers: any[] = [];
     
-    // Collect students sequentially
     data.stages.forEach(stage => {
         const count = committee.counts[stage.id] || 0;
         for(let i=0; i<count; i++) {
@@ -371,7 +373,6 @@ export const printSeatLabels = (data: AppData, settings: PrintSettings) => {
       pageItems.forEach(item => {
         cellsHtml += `
           <div class="sticker-cell">
-             <!-- Top Row: Logo & School Name -->
              <div style="display: flex; align-items: center; justify-content: space-between; height: 12mm; border-bottom: 1px solid #ddd; padding-bottom: 1px;">
                 <div style="display:flex; align-items:center;">
                    <img src="${settings.logoUrl}" style="height: 10mm; width: auto; max-width: 15mm; object-fit: contain; filter: grayscale(100%) contrast(120%);" />
@@ -383,14 +384,12 @@ export const printSeatLabels = (data: AppData, settings: PrintSettings) => {
                 </div>
              </div>
              
-             <!-- Middle Row: Student Name -->
              <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
                  <div style="font-weight: 900; font-size: 14px; line-height: 1.2; color: #000; text-align: center; overflow: hidden; max-height: 2.4em;">
                     ${item.studentName}
                  </div>
              </div>
              
-             <!-- Bottom Row: Details -->
              <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #000; padding-top: 2px;">
                  <div style="text-align: right;">
                     <span style="font-size: 8px;">اللجنة:</span>
@@ -405,11 +404,9 @@ export const printSeatLabels = (data: AppData, settings: PrintSettings) => {
           </div>`;
       });
       
-      // Fill remaining cells
       const remaining = ITEMS_PER_PAGE - pageItems.length;
       for(let r=0; r<remaining; r++) { cellsHtml += `<div class="sticker-cell"></div>`; }
       
-      // Page Container (Grid)
       html += `
         <div class="sticker-sheet">
            ${cellsHtml}
@@ -427,7 +424,6 @@ export const printInvigilatorAttendance = (
     config?: DynamicReportConfig,
     assignments?: Record<string, string>
 ) => {
-// ... [rest of file unchanged]
   const fCommNo = getField(config, 'col_comm_no', 'رقم اللجنة');
   const fCommLoc = getField(config, 'col_comm_loc', 'مقر اللجنة');
   const fSubject = getField(config, 'col_subject', 'المادة');
@@ -441,7 +437,7 @@ export const printInvigilatorAttendance = (
   items.forEach((c: any) => {
     const teacherName = assignments && c.name ? (assignments[c.name] || '') : '';
     rows += `
-      <tr style="height: 25px;"> <!-- Reduced row height -->
+      <tr style="height: 25px;"> 
         ${fCommNo.visible ? `<td>${c.name || ''}</td>` : ''}
         ${fCommLoc.visible ? `<td>${c.location || ''}</td>` : ''}
         ${fSubject.visible ? `<td></td>` : ''}
@@ -479,6 +475,17 @@ export const printInvigilatorAttendance = (
         </thead>
         <tbody>${rows}</tbody>
       </table>
+      
+      <div style="margin-top: 40px; display: flex; justify-content: space-between; font-weight: 800; font-size: 11px; text-align: center; padding: 0 40px;">
+            <div style="width: 30%;">
+                <div>وكيل الشؤون التعليمية</div>
+                <div style="margin-top: 25px;">${settings.agentName || '..........................'}</div>
+            </div>
+            <div style="width: 30%;">
+                <div>مدير المدرسة</div>
+                <div style="margin-top: 25px;">${settings.managerName || '..........................'}</div>
+            </div>
+      </div>
     </div>
   `;
   openPrintWindow(content, 'portrait');
@@ -526,6 +533,17 @@ export const printAnswerPaperReceipt = (data: AppData, settings: PrintSettings, 
           </thead>
           <tbody>${rows}</tbody>
         </table>
+        
+        <div style="margin-top: 40px; display: flex; justify-content: space-between; font-weight: 800; font-size: 11px; text-align: center; padding: 0 40px;">
+            <div style="width: 30%;">
+                <div>وكيل الشؤون التعليمية</div>
+                <div style="margin-top: 25px;">${settings.agentName || '..........................'}</div>
+            </div>
+            <div style="width: 30%;">
+                <div>مدير المدرسة</div>
+                <div style="margin-top: 25px;">${settings.managerName || '..........................'}</div>
+            </div>
+        </div>
       </div>
     `;
     openPrintWindow(content, 'landscape');
@@ -747,6 +765,17 @@ export const printExamPaperTracking = (data: AppData, settings: PrintSettings, c
           </thead>
           <tbody>${rows}</tbody>
         </table>
+        
+        <div style="margin-top: 40px; display: flex; justify-content: space-between; font-weight: 800; font-size: 11px; text-align: center; padding: 0 40px;">
+            <div style="width: 30%;">
+                <div>وكيل الشؤون التعليمية</div>
+                <div style="margin-top: 25px;">${settings.agentName || '..........................'}</div>
+            </div>
+            <div style="width: 30%;">
+                <div>مدير المدرسة</div>
+                <div style="margin-top: 25px;">${settings.managerName || '..........................'}</div>
+            </div>
+        </div>
       </div>
     `;
     openPrintWindow(content, 'landscape');
@@ -807,7 +836,7 @@ export const printViolationMinutes = (data: AppData, settings: PrintSettings) =>
          </div>
       </div>
       
-       <div style="margin-top:20px; font-weight:900; text-align:center;">يعتمد، مدير المدرسة: ..................................................... التوقيع: ........................</div>
+       <div style="margin-top:20px; font-weight:900; text-align:center;">يعتمد، مدير المدرسة: ${settings.managerName || '.....................................................'} التوقيع: ........................</div>
     </div>
     `;
     openPrintWindow(content, 'portrait');
@@ -865,7 +894,7 @@ export const printSubCommitteeTasks = (data: AppData, settings: PrintSettings) =
          </table>
       </div>
       
-       <div style="margin-top:20px; font-weight:900; text-align:left;">مدير المدرسة: .......................................</div>
+       <div style="margin-top:20px; font-weight:900; text-align:left;">مدير المدرسة: ${settings.managerName || '.......................................'}</div>
     </div>
     `;
     openPrintWindow(content, 'portrait');
@@ -922,7 +951,7 @@ export const printAbsenceRecord = (data: AppData, settings: PrintSettings, confi
         </table>
         
         <div style="margin-top:15px; font-weight:900; display:flex; justify-content:space-between;">
-           <div>مدير المدرسة: ..............................</div>
+           <div>مدير المدرسة: ${settings.managerName || '..............................'}</div>
            <div>التوقيع: ......................</div>
         </div>
         <div style="font-size:10px; margin-top:5px; color:#000; font-weight:bold;">
@@ -981,7 +1010,7 @@ export const printQuestionEnvelopeOpening = (data: AppData, settings: PrintSetti
            <tr style="height:40px;"><td>4</td>${fName.visible ? `<td></td>` : ''}<td>معلم</td>${fRole.visible ? `<td>عضواً</td>` : ''}<td></td></tr>
          </tbody>
       </table>
-      <div style="margin-top:40px; font-weight:900;">مدير المدرسة: ....................................... التوقيع: ........................</div>
+      <div style="margin-top:40px; font-weight:900;">مدير المدرسة: ${settings.managerName || '.......................................'} التوقيع: ........................</div>
     </div>
   `;
   openPrintWindow(content, 'portrait');

@@ -27,16 +27,35 @@ export interface SchoolData {
   term: string;
 }
 
+// --- Schedule Types ---
+export interface PeriodAssignment {
+  periodId: number;
+  main: string[]; // Teacher names assigned to rooms (index matches committee index)
+  reserves: string[]; // Teacher names in reserve
+}
+
+export interface DaySchedule {
+  dayId: number;
+  date: string;
+  periods: PeriodAssignment[];
+}
+
+export interface ExamSchedule {
+  days: DaySchedule[];
+  teachersPerCommittee: number;
+}
+
 export interface AppData {
   school: SchoolData;
   stages: Stage[];
   committees: Committee[];
-  teachers: string[]; // New: List of teachers
+  teachers: string[]; 
+  schedule?: ExamSchedule; // New: Saved Schedule
 }
 
 export interface PrintSettings {
-  adminName: string; // e.g., الإدارة العامة للتعليم بمحافظة جدة
-  schoolName: string; // Override school name
+  adminName: string;
+  schoolName: string; 
   logoUrl: string;
   doorLabelTitle: string;
   attendanceTitle: string;
@@ -71,7 +90,8 @@ export enum AppStep {
   DATA = 1,
   IMPORT = 2,
   DISTRIBUTE = 3,
-  PRINT = 4
+  TEACHERS = 4, // New Step
+  PRINT = 5
 }
 
 // --- New Types for Dynamic Reporting ---

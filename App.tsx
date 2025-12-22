@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { AppData, Stage, Committee, AppStep, Student } from './types';
+import { AppData, Stage, Committee, AppStep, Student, ExamSchedule } from './types';
 import ImportWizard from './components/ImportWizard';
 import DistributionPanel from './components/DistributionPanel';
+import InvigilatorDistributionPanel from './components/InvigilatorDistributionPanel';
 import PrintCenter from './components/PrintCenter';
 import { readExcelFile, getSheetData } from './services/excelService';
-import { Trash2, Printer, Settings2, Users, Database, Upload, UserPlus, X } from 'lucide-react';
+import { Trash2, Printer, Settings2, Users, Database, Upload, UserPlus, X, ClipboardList } from 'lucide-react';
 
 const STORAGE_KEY = 'ExamSystemData_v2';
 
@@ -145,6 +146,10 @@ const App: React.FC = () => {
     }
   };
 
+  const handleScheduleSave = (schedule: ExamSchedule) => {
+      setData(prev => ({ ...prev, schedule }));
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#e3f2fd] via-[#f3e5f5] to-[#e8eaf6] py-8 px-4 font-sans text-right" dir="rtl">
       <div className="max-w-7xl mx-auto bg-white rounded-3xl shadow-xl border border-white/50 overflow-hidden backdrop-blur-sm">
@@ -168,12 +173,13 @@ const App: React.FC = () => {
         </header>
 
         {/* Steps Navigation */}
-        <nav className="p-4 bg-gray-50/50 border-b border-gray-100">
-            <div className="flex justify-center gap-2 md:gap-4">
+        <nav className="p-4 bg-gray-50/50 border-b border-gray-100 overflow-x-auto">
+            <div className="flex justify-center gap-2 md:gap-4 min-w-max">
                 {[
                     { id: AppStep.DATA, label: 'البيانات الأساسية', icon: Database },
                     { id: AppStep.IMPORT, label: 'الطلاب', icon: Users },
-                    { id: AppStep.DISTRIBUTE, label: 'التوزيع', icon: Settings2 },
+                    { id: AppStep.DISTRIBUTE, label: 'توزيع الطلاب', icon: Settings2 },
+                    { id: AppStep.TEACHERS, label: 'الملاحظين', icon: ClipboardList },
                     { id: AppStep.PRINT, label: 'الطباعة', icon: Printer },
                 ].map((s) => {
                     const isActive = step === s.id;
@@ -381,7 +387,12 @@ const App: React.FC = () => {
                 )}
             </div>
 
-            {/* Step 4: Print Center */}
+            {/* Step 4: Teacher Distribution (NEW) */}
+            <div className={step === AppStep.TEACHERS ? 'block animate-fade-in' : 'hidden'}>
+                 <InvigilatorDistributionPanel data={data} onSave={handleScheduleSave} />
+            </div>
+
+            {/* Step 5: Print Center */}
             <div className={step === AppStep.PRINT ? 'block animate-fade-in' : 'hidden'}>
                 <PrintCenter data={data} />
             </div>

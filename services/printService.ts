@@ -1,36 +1,22 @@
-
 import { AppData, PrintSettings, DynamicReportConfig } from '../types';
 
 // --- Shared Components ---
 
 const getHeaderHTML = (school: any, settings: PrintSettings) => `
-  <div style="display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 10px; direction: rtl;">
-    <div style="text-align: right; width: 35%; font-size: 11px; line-height: 1.3; font-weight: 800; color: #000;">
+  <div style="display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px; direction: rtl;">
+    <div style="text-align: right; width: 30%; font-size: 11px; line-height: 1.4; font-weight: 800; color: #000;">
       <div>المملكة العربية السعودية</div>
       <div>وزارة التعليم</div>
       <div>${settings.adminName}</div>
-      <div>المدرسة: ${settings.schoolName || school.name}</div>
     </div>
-    <div style="text-align: center; width: 30%;">
-      <img src="${settings.logoUrl}" style="height: 60px; object-fit: contain; filter: grayscale(100%) contrast(120%);" alt="Ministry Logo">
+    <div style="text-align: center; width: 40%; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
+      <img src="${settings.logoUrl}" style="height: 60px; object-fit: contain; margin-bottom: 5px; filter: grayscale(100%) contrast(120%);" alt="Logo">
+      <div style="font-size: 14px; font-weight: 900; text-decoration: underline; margin-top: 2px;">${settings.schoolName || school.name}</div>
     </div>
-    <div style="text-align: left; width: 35%; font-size: 11px; line-height: 1.3; font-weight: 800; color: #000; padding-left: 5px;">
+    <div style="text-align: left; width: 30%; font-size: 11px; line-height: 1.4; font-weight: 800; color: #000; padding-left: 5px;">
        <div>${school.term}</div>
        <div>${school.year}</div>
     </div>
-  </div>
-`;
-
-const getFooterHTML = () => `
-  <div style="margin-top: 20px; display: flex; justify-content: space-between; font-weight: 800; font-size: 11px; text-align: center; page-break-inside: avoid; color: #000;">
-      <div style="width: 40%;">
-        <div style="margin-bottom: 25px;">رئيس لجنة الاختبارات</div>
-        <div>.........................................</div>
-      </div>
-      <div style="width: 40%;">
-        <div style="margin-bottom: 25px;">رئيس الكنترول</div>
-        <div>.........................................</div>
-      </div>
   </div>
 `;
 
@@ -55,6 +41,8 @@ const openPrintWindow = (content: string, orientation: 'portrait' | 'landscape' 
   
   // Determine CSS size based on orientation
   const sizeCss = orientation === 'sticker' ? 'A4' : `A4 ${orientation}`;
+  // For stickers, we force 0 margin on @page to handle physical margins manually in CSS
+  const marginCss = orientation === 'sticker' ? '0' : '5mm';
 
   w.document.open();
   w.document.write(`
@@ -75,7 +63,7 @@ const openPrintWindow = (content: string, orientation: 'portrait' | 'landscape' 
             font-weight: 700;
           }
           @media print {
-            @page { size: ${sizeCss}; margin: 5mm; }
+            @page { size: ${sizeCss}; margin: ${marginCss}; }
             body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .no-print { display: none; }
           }
@@ -106,9 +94,62 @@ const openPrintWindow = (content: string, orientation: 'portrait' | 'landscape' 
           .grid-row:last-child { border-bottom: none; }
           .grid-cell { flex: 1; border-left: 1px solid #000; padding: 3px; text-align: center; }
           .grid-cell:last-child { border-left: none; }
+
+          /* --- STICKER SPECIFIC STYLES (Avery L7160 / 3x7) --- */
+          .sticker-sheet {
+             width: 210mm;
+             height: 297mm;
+             
+             /* 
+                === إعدادات الهوامش العلوية (هام جداً) ===
+                القياسي هو 15.1mm.
+                اذا كانت الطباعة منخفضة (تخرج عن الملصق من الأسفل)، قلل هذا الرقم (مثلاً اجعله 10mm أو 12mm).
+                اذا كانت الطباعة مرتفعة جداً (تخرج عن الملصق من الأعلى)، زد هذا الرقم (مثلاً اجعله 20mm).
+             */
+             padding-top: 12.0mm; 
+             
+             padding-left: 7.2mm; 
+             padding-right: 7.2mm; 
+             
+             box-sizing: border-box;
+             display: grid;
+             /* 3 Columns of 63.5mm */
+             grid-template-columns: 63.5mm 63.5mm 63.5mm;
+             /* 7 Rows of 38.1mm */
+             grid-template-rows: repeat(7, 38.1mm);
+             /* Horizontal Gap 2.5mm */
+             column-gap: 2.5mm;
+             row-gap: 0mm;
+             page-break-after: always;
+             overflow: hidden; 
+          }
+          
+          .sticker-cell {
+             width: 63.5mm;
+             height: 38.1mm;
+             padding: 1mm 2mm; 
+             box-sizing: border-box;
+             overflow: hidden;
+             display: flex;
+             flex-direction: column;
+             justify-content: space-between;
+             text-align: center;
+             background: white;
+             /* حدود وهمية للمساعدة في المعاينة - لا تظهر في الطباعة عادة إذا كانت خفيفة */
+             /* border: 1px dashed #eee; */
+          }
+          
+          /* Warning message for print settings */
+          .print-warning {
+             position: fixed; top: 0; left: 0; width: 100%; background: #fff3cd; color: #856404; text-align: center; padding: 10px; font-weight: bold; border-bottom: 1px solid #ffeeba; z-index: 9999;
+          }
+          @media print {
+            .print-warning { display: none; }
+          }
         </style>
       </head>
       <body>
+        ${orientation === 'sticker' ? '<div class="print-warning no-print">تنبيه: تأكد من ضبط إعدادات الطابعة (Scale) على 100% وإلغاء خيار (Fit to Page) لضمان دقة الملصقات.</div>' : ''}
         ${content}
         <script>
            window.onload = function() {
@@ -127,7 +168,6 @@ const openPrintWindow = (content: string, orientation: 'portrait' | 'landscape' 
 // ==================== REPORT IMPLEMENTATIONS =============================
 // =========================================================================
 
-// 1. Student Counts in Committees
 export const printStudentCountsReport = (data: AppData, settings: PrintSettings, config?: DynamicReportConfig) => {
   const fClass = getField(config, 'col_class', 'الصف');
   const fComm = getField(config, 'col_comm', 'رقم اللجنة');
@@ -149,7 +189,6 @@ export const printStudentCountsReport = (data: AppData, settings: PrintSettings,
   const colsPerRo = 4;
   let gridContent = '';
   
-  // Header Row for Grid
   gridContent += `<div class="grid-row" style="background:#eee; font-weight:900; border-top:1px solid #000;">`;
   for(let k=0; k<colsPerRo; k++) {
      gridContent += `
@@ -163,7 +202,6 @@ export const printStudentCountsReport = (data: AppData, settings: PrintSettings,
   }
   gridContent += `</div>`;
 
-  // Data Rows
   for (let i = 0; i < rowsData.length; i += colsPerRo) {
     gridContent += `<div class="grid-row">`;
     for (let j = 0; j < colsPerRo; j++) {
@@ -184,7 +222,6 @@ export const printStudentCountsReport = (data: AppData, settings: PrintSettings,
     gridContent += `</div>`;
   }
   
-  // Total Row
   gridContent += `
     <div class="grid-row" style="background:#eee; font-weight:900; border-top:1px solid #000;">
        <div class="grid-cell" style="text-align:center;">المجموع الكلي: ${totalCount} طالب</div>
@@ -203,7 +240,6 @@ export const printStudentCountsReport = (data: AppData, settings: PrintSettings,
   openPrintWindow(content, 'portrait');
 };
 
-// 2. Committee Data Table
 export const printCommitteeData = (data: AppData, settings: PrintSettings) => {
     let rows = '';
     data.committees.forEach(c => {
@@ -243,13 +279,155 @@ export const printCommitteeData = (data: AppData, settings: PrintSettings) => {
     openPrintWindow(content, 'portrait');
 };
 
-// 3. Invigilator Attendance List
+export const printDoorLabels = (data: AppData, settings: PrintSettings) => {
+    let html = '';
+    data.committees.forEach(committee => {
+      const totalStudents = data.stages.reduce((acc, stage) => acc + (committee.counts[stage.id] || 0), 0);
+      if (totalStudents === 0) return;
+      let detailsHtml = '';
+      data.stages.forEach(stage => {
+        const count = committee.counts[stage.id] || 0;
+        if (count > 0) {
+          detailsHtml += `<div style="display: flex; justify-content: space-between; border-bottom: 2px dotted #ccc; padding: 10px 0; font-size: 20px;"><span>${stage.name}</span><span style="font-weight: 900; color: #208caa;">${count}</span></div>`;
+        }
+      });
+      const pageContent = `<div style="padding: 10px; position: relative;">${getHeaderHTML(data.school, settings)}<div style="text-align: center; margin-top: 20px;"><h1 style="font-size: 24px; color: #208caa; border: 3px solid #208caa; display: inline-block; padding: 8px 40px; border-radius: 50px;">${settings.doorLabelTitle}</h1></div><div style="border: 5px solid #000; border-radius: 30px; padding: 40px; margin: 30px auto; width: 85%; background: #fff; text-align: center; box-shadow: 10px 10px 0px #eee;"><div style="font-size: 24px; color: #000; margin-bottom: 10px; font-weight:800;">لجنة رقم</div><div style="font-size: 180px; font-weight: 900; line-height: 1; color: #000;">${committee.name}</div><div style="font-size: 40px; margin-top: 20px; color: #7030A0; font-weight: 900;">${committee.location || ''}</div></div><div style="width: 80%; margin: 30px auto; text-align: right; background: #f9f9f9; padding: 20px; border-radius: 20px; border: 2px solid #ddd;">${detailsHtml}<div style="margin-top: 20px; padding-top: 15px; border-top: 3px solid #000; font-weight: 900; font-size: 24px; text-align: left;">الإجمالي: ${totalStudents} طالب</div></div></div>`;
+      html += `<div class="page-break">${pageContent}</div>`;
+    });
+    openPrintWindow(html, 'portrait');
+};
+
+// REVERTED: Print Attendance Grouped by Stage
+export const printAttendance = (data: AppData, settings: PrintSettings) => {
+  let html = '';
+  // Track cursor per stage to know which student we are on
+  const cursors: Record<number, number> = {};
+  data.stages.forEach(s => cursors[s.id] = 0);
+
+  data.committees.forEach(committee => {
+    let rows = '';
+    let sn = 1;
+    let hasStudents = false;
+    
+    // Iterate stages sequentially
+    data.stages.forEach(stage => {
+        const count = committee.counts[stage.id] || 0;
+        if (count > 0) {
+            hasStudents = true;
+
+            for(let i=0; i<count; i++) {
+                const idx = cursors[stage.id]++;
+                const student = stage.students[idx] || { name: '...', studentId: '-' };
+                const seatNumber = stage.prefix + String(idx + 1).padStart(3, '0');
+                
+                rows += `<tr>${settings.showColSequence ? `<td style="width:30px;">${sn++}</td>` : ''}${settings.showColSeatId ? `<td style="font-weight: 900; font-size: 13px;">${seatNumber}</td>` : ''}${settings.showColName ? `<td style="text-align: right; padding-right: 10px; font-weight: 800;">${student.name}</td>` : ''}${settings.showColStage ? `<td>${stage.name}</td>` : ''}${settings.showColPresence ? `<td></td>` : ''}${settings.showColSignature ? `<td></td>` : ''}</tr>`;
+            }
+        }
+    });
+
+    if (!hasStudents) return;
+
+    const pageContent = `<div>${getHeaderHTML(data.school, settings)}<div style="text-align: center; margin: 10px 0 15px 0; border-bottom: 1px solid #eee; padding-bottom: 5px;"><h2 style="margin: 0; color: #208caa; font-size: 20px;">${settings.attendanceTitle}</h2><div style="display: flex; justify-content: center; gap: 20px; margin-top: 5px; font-size: 16px; font-weight: 800;"><span>اللجنة: ${committee.name}</span><span>|</span><span>المقر: ${committee.location || '___'}</span></div></div><table><thead><tr>${settings.showColSequence ? `<th style="width: 30px;">${settings.colSequence}</th>` : ''}${settings.showColSeatId ? `<th style="width: 80px;">${settings.colSeatId}</th>` : ''}${settings.showColName ? `<th>${settings.colName}</th>` : ''}${settings.showColStage ? `<th style="width: 100px;">${settings.colStage}</th>` : ''}${settings.showColPresence ? `<th style="width: 60px;">${settings.colPresence}</th>` : ''}${settings.showColSignature ? `<th style="width: 100px;">${settings.colSignature}</th>` : ''}</tr></thead><tbody>${rows}</tbody></table><div style="margin-top: 40px; display: flex; justify-content: space-between; font-weight: 800; font-size: 12px; text-align: center;"><div style="width: 30%;"><div>الملاحظ الأول</div><div style="margin-top: 20px;">..........................</div></div><div style="width: 30%;"><div>الملاحظ الثاني</div><div style="margin-top: 20px;">..........................</div></div><div style="width: 30%;"><div>مدير المدرسة</div><div style="margin-top: 20px;">..........................</div></div></div></div>`;
+    html += `<div class="page-break">${pageContent}</div>`;
+  });
+  openPrintWindow(html, 'portrait');
+};
+
+// UPDATED: Seat Labels - CLASSIC LAYOUT (Logo + Text)
+export const printSeatLabels = (data: AppData, settings: PrintSettings) => {
+  const cursors: Record<number, number> = {};
+  data.stages.forEach(s => cursors[s.id] = 0);
+  
+  let html = '';
+  const ITEMS_PER_PAGE = 21; // 3 columns * 7 rows
+  
+  data.committees.forEach(committee => {
+    const committeeStickers: any[] = [];
+    
+    // Collect students sequentially
+    data.stages.forEach(stage => {
+        const count = committee.counts[stage.id] || 0;
+        for(let i=0; i<count; i++) {
+            const idx = cursors[stage.id]++;
+            const student = stage.students[idx] || { name: '...', studentId: '-' };
+            const seatNumber = stage.prefix + String(idx + 1).padStart(3, '0');
+            
+            committeeStickers.push({ 
+                studentName: student.name, 
+                seatNumber: seatNumber, 
+                stageName: stage.name, 
+                committeeName: committee.name, 
+                location: committee.location 
+            });
+        }
+    });
+    
+    if (committeeStickers.length === 0) return;
+    
+    for (let i = 0; i < committeeStickers.length; i += ITEMS_PER_PAGE) {
+      const pageItems = committeeStickers.slice(i, i + ITEMS_PER_PAGE);
+      let cellsHtml = '';
+      
+      pageItems.forEach(item => {
+        cellsHtml += `
+          <div class="sticker-cell">
+             <!-- Top Row: Logo & School Name -->
+             <div style="display: flex; align-items: center; justify-content: space-between; height: 12mm; border-bottom: 1px solid #ddd; padding-bottom: 1px;">
+                <div style="display:flex; align-items:center;">
+                   <img src="${settings.logoUrl}" style="height: 10mm; width: auto; max-width: 15mm; object-fit: contain; filter: grayscale(100%) contrast(120%);" />
+                </div>
+                <div style="flex: 1; text-align: center; font-size: 8px; font-weight: 800; line-height: 1.1; overflow: hidden; max-height: 100%;">
+                    <div>المملكة العربية السعودية</div>
+                    <div>وزارة التعليم</div>
+                    <div style="font-weight: 900;">${settings.schoolName || data.school.name}</div>
+                </div>
+             </div>
+             
+             <!-- Middle Row: Student Name -->
+             <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
+                 <div style="font-weight: 900; font-size: 14px; line-height: 1.2; color: #000; text-align: center; overflow: hidden; max-height: 2.4em;">
+                    ${item.studentName}
+                 </div>
+             </div>
+             
+             <!-- Bottom Row: Details -->
+             <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #000; padding-top: 2px;">
+                 <div style="text-align: right;">
+                    <span style="font-size: 8px;">اللجنة:</span>
+                    <span style="font-size: 12px; font-weight: 900;">${item.committeeName}</span>
+                 </div>
+                 <div style="text-align: left;">
+                    <span style="font-size: 8px;">جلوس:</span>
+                    <span style="font-size: 14px; font-weight: 900;">${item.seatNumber}</span>
+                 </div>
+             </div>
+             <div style="font-size: 7px; text-align: center; margin-top: -2px;">${item.stageName}</div>
+          </div>`;
+      });
+      
+      // Fill remaining cells
+      const remaining = ITEMS_PER_PAGE - pageItems.length;
+      for(let r=0; r<remaining; r++) { cellsHtml += `<div class="sticker-cell"></div>`; }
+      
+      // Page Container (Grid)
+      html += `
+        <div class="sticker-sheet">
+           ${cellsHtml}
+        </div>`;
+    }
+  });
+  
+  if (html === '') { alert('لا يوجد طلاب لتوليد الملصقات.'); return; }
+  openPrintWindow(html, 'sticker');
+};
+
 export const printInvigilatorAttendance = (
     data: AppData, 
     settings: PrintSettings, 
     config?: DynamicReportConfig,
     assignments?: Record<string, string>
 ) => {
+// ... [rest of file unchanged]
   const fCommNo = getField(config, 'col_comm_no', 'رقم اللجنة');
   const fCommLoc = getField(config, 'col_comm_loc', 'مقر اللجنة');
   const fSubject = getField(config, 'col_subject', 'المادة');
@@ -306,7 +484,6 @@ export const printInvigilatorAttendance = (
   openPrintWindow(content, 'portrait');
 };
 
-// 4. Answer Paper Receipt
 export const printAnswerPaperReceipt = (data: AppData, settings: PrintSettings, config?: DynamicReportConfig) => {
     const colComm = getField(config, 'col_comm', 'رقم اللجنة');
     const colApplicants = getField(config, 'col_applicants', 'المتقدمون');
@@ -354,7 +531,6 @@ export const printAnswerPaperReceipt = (data: AppData, settings: PrintSettings, 
     openPrintWindow(content, 'landscape');
 };
 
-// 8. Unassigned Students
 export const printUnassignedStudents = (data: AppData, settings: PrintSettings) => {
     let rows = '';
     let count = 0;
@@ -416,7 +592,6 @@ export const printUnassignedStudents = (data: AppData, settings: PrintSettings) 
     openPrintWindow(content, 'portrait');
 };
 
-// 9. Empty Committees
 export const printEmptyCommittees = (data: AppData, settings: PrintSettings) => {
     let rows = '';
     data.committees.forEach(c => {
@@ -455,55 +630,37 @@ export const printEmptyCommittees = (data: AppData, settings: PrintSettings) => 
     openPrintWindow(content, 'portrait');
 };
 
-// 11. Distribution by Grade/Class
 export const printDistributionByGrade = (data: AppData, settings: PrintSettings) => {
-    // This report groups students by Class within stages, and shows which committees they are in
-    // This is complex because students are split across committees.
-    // We will list: Grade - Class - Student Range - Committee(s)
-    
     let html = '';
     
     data.stages.forEach(stage => {
         let rows = '';
-        
-        // Group students by class
         const classGroups: Record<string, number> = {};
         stage.students.forEach(s => {
             const cls = s.class || 'بدون فصل';
             classGroups[cls] = (classGroups[cls] || 0) + 1;
         });
 
-        // We can't easily map exact student to exact committee without running the cursor logic again
-        // Let's run the cursor logic to find out which class goes to which committee
-        
-        // Simulating distribution
         let currentStudentIdx = 0;
         const distributionMap: {className: string, committee: string, count: number}[] = [];
         
         data.committees.forEach(c => {
             const countInComm = c.counts[stage.id] || 0;
             if (countInComm > 0) {
-                // Students from currentStudentIdx to currentStudentIdx + countInComm
                 const committeeStudents = stage.students.slice(currentStudentIdx, currentStudentIdx + countInComm);
-                
-                // Group these students by class
                 const commClassCounts: Record<string, number> = {};
                 committeeStudents.forEach(s => {
                     const cls = s.class || 'عام';
                     commClassCounts[cls] = (commClassCounts[cls] || 0) + 1;
                 });
-                
                 Object.entries(commClassCounts).forEach(([cls, cnt]) => {
                      distributionMap.push({ className: cls, committee: c.name, count: cnt });
                 });
-                
                 currentStudentIdx += countInComm;
             }
         });
         
-        // Sort and Render
         distributionMap.sort((a,b) => a.className.localeCompare(b.className));
-        
         distributionMap.forEach(d => {
             rows += `<tr><td>${d.className}</td><td>${d.committee}</td><td>${d.count}</td></tr>`;
         });
@@ -529,7 +686,6 @@ export const printDistributionByGrade = (data: AppData, settings: PrintSettings)
     openPrintWindow(content, 'portrait');
 };
 
-// 13. Exam Paper Tracking
 export const printExamPaperTracking = (data: AppData, settings: PrintSettings, config?: DynamicReportConfig) => {
     const lblTeacher = getField(config, 'lbl_teacher', 'اسم المعلم');
     const lblSubject = getField(config, 'lbl_subject', 'المادة');
@@ -551,14 +707,11 @@ export const printExamPaperTracking = (data: AppData, settings: PrintSettings, c
              ${lblSubject.visible ? `<td></td>` : ''}
              ${lblGrade.visible ? `<td></td>` : ''}
              ${lblTrack.visible ? `<td></td>` : ''}
-             
              ${lblAssignDate.visible ? `<td style="font-size:10px; color:#aaa;"></td>` : ''}
              ${lblAssignSig.visible ? `<td></td>` : ''}
-
              ${lblEnvQ.visible ? `<td></td>` : ''}
              ${lblEnvA.visible ? `<td></td>` : ''}
              ${lblEnvS.visible ? `<td></td>` : ''}
-
              ${lblDeliverDate.visible ? `<td style="font-size:10px; color:#aaa;"></td>` : ''}
              ${lblDeliverSig.visible ? `<td></td>` : ''}
              <td></td>
@@ -578,21 +731,16 @@ export const printExamPaperTracking = (data: AppData, settings: PrintSettings, c
                ${lblSubject.visible ? `<th rowspan="2">${lblSubject.label}</th>` : ''}
                ${lblGrade.visible ? `<th rowspan="2">${lblGrade.label}</th>` : ''}
                ${lblTrack.visible ? `<th rowspan="2">${lblTrack.label}</th>` : ''}
-               
                <th colspan="${(lblAssignDate.visible?1:0) + (lblAssignSig.visible?1:0)}" style="background:#e0e0e0;">استلام قرار التكليف</th>
-               
                ${lblEnvQ.visible ? `<th rowspan="2" style="width:50px;">${lblEnvQ.label}</th>` : ''}
                ${lblEnvA.visible ? `<th rowspan="2" style="width:50px;">${lblEnvA.label}</th>` : ''}
                ${lblEnvS.visible ? `<th rowspan="2" style="width:70px;">${lblEnvS.label}</th>` : ''}
-
                <th colspan="${(lblDeliverDate.visible?1:0) + (lblDeliverSig.visible?1:0)}" style="background:#e0e0e0;">تسليم وكيل الشؤون التعليمية</th>
-               
                <th rowspan="2">ملاحظات</th>
             </tr>
             <tr style="background:#f0f0f0;">
                ${lblAssignDate.visible ? `<th style="width:80px;">${lblAssignDate.label}</th>` : ''}
                ${lblAssignSig.visible ? `<th>${lblAssignSig.label}</th>` : ''}
-               
                ${lblDeliverDate.visible ? `<th style="width:80px;">${lblDeliverDate.label}</th>` : ''}
                ${lblDeliverSig.visible ? `<th>${lblDeliverSig.label}</th>` : ''}
             </tr>
@@ -604,7 +752,6 @@ export const printExamPaperTracking = (data: AppData, settings: PrintSettings, c
     openPrintWindow(content, 'landscape');
 };
 
-// 15. Violation Minutes
 export const printViolationMinutes = (data: AppData, settings: PrintSettings) => {
     const content = `
     <div>
@@ -666,7 +813,6 @@ export const printViolationMinutes = (data: AppData, settings: PrintSettings) =>
     openPrintWindow(content, 'portrait');
 };
 
-// 17. Sub-Committee Tasks
 export const printSubCommitteeTasks = (data: AppData, settings: PrintSettings) => {
     const tasks = [
         "التأكد من تهيئة مقر اللجنة ونظافته وترتيب الطاولات.",
@@ -723,87 +869,6 @@ export const printSubCommitteeTasks = (data: AppData, settings: PrintSettings) =
     </div>
     `;
     openPrintWindow(content, 'portrait');
-};
-
-// Standard Reports Imports
-export const printDoorLabels = (data: AppData, settings: PrintSettings) => {
-    let html = '';
-    data.committees.forEach(committee => {
-      const totalStudents = data.stages.reduce((acc, stage) => acc + (committee.counts[stage.id] || 0), 0);
-      if (totalStudents === 0) return;
-      let detailsHtml = '';
-      data.stages.forEach(stage => {
-        const count = committee.counts[stage.id] || 0;
-        if (count > 0) {
-          detailsHtml += `<div style="display: flex; justify-content: space-between; border-bottom: 2px dotted #ccc; padding: 10px 0; font-size: 20px;"><span>${stage.name}</span><span style="font-weight: 900; color: #208caa;">${count}</span></div>`;
-        }
-      });
-      const pageContent = `<div style="padding: 10px; position: relative;">${getHeaderHTML(data.school, settings)}<div style="text-align: center; margin-top: 20px;"><h1 style="font-size: 24px; color: #208caa; border: 3px solid #208caa; display: inline-block; padding: 8px 40px; border-radius: 50px;">${settings.doorLabelTitle}</h1></div><div style="border: 5px solid #000; border-radius: 30px; padding: 40px; margin: 30px auto; width: 85%; background: #fff; text-align: center; box-shadow: 10px 10px 0px #eee;"><div style="font-size: 24px; color: #000; margin-bottom: 10px; font-weight:800;">لجنة رقم</div><div style="font-size: 180px; font-weight: 900; line-height: 1; color: #000;">${committee.name}</div><div style="font-size: 40px; margin-top: 20px; color: #7030A0; font-weight: 900;">${committee.location || ''}</div></div><div style="width: 80%; margin: 30px auto; text-align: right; background: #f9f9f9; padding: 20px; border-radius: 20px; border: 2px solid #ddd;">${detailsHtml}<div style="margin-top: 20px; padding-top: 15px; border-top: 3px solid #000; font-weight: 900; font-size: 24px; text-align: left;">الإجمالي: ${totalStudents} طالب</div></div></div>`;
-      html += `<div class="page-break">${pageContent}</div>`;
-    });
-    openPrintWindow(html, 'portrait');
-};
-
-export const printAttendance = (data: AppData, settings: PrintSettings) => {
-    let html = '';
-  const cursors: Record<number, number> = {};
-  data.stages.forEach(s => cursors[s.id] = 0);
-
-  data.committees.forEach(committee => {
-    let rows = '';
-    let sn = 1;
-    let hasStudents = false;
-    data.stages.forEach(stage => {
-      const count = committee.counts[stage.id] || 0;
-      if (count > 0) {
-        hasStudents = true;
-        for (let i = 0; i < count; i++) {
-          const idx = cursors[stage.id]++;
-          const student = stage.students[idx] || { name: '...', studentId: '-' };
-          const seatNumber = stage.prefix + String(idx + 1).padStart(3, '0');
-          rows += `<tr>${settings.showColSequence ? `<td style="width:30px;">${sn++}</td>` : ''}${settings.showColSeatId ? `<td style="font-weight: 900; font-size: 13px;">${seatNumber}</td>` : ''}${settings.showColName ? `<td style="text-align: right; padding-right: 10px; font-weight: 800;">${student.name}</td>` : ''}${settings.showColStage ? `<td>${stage.name}</td>` : ''}${settings.showColPresence ? `<td></td>` : ''}${settings.showColSignature ? `<td></td>` : ''}</tr>`;
-        }
-      }
-    });
-    if (!hasStudents) return;
-    const pageContent = `<div>${getHeaderHTML(data.school, settings)}<div style="text-align: center; margin: 10px 0 15px 0; border-bottom: 1px solid #eee; padding-bottom: 5px;"><h2 style="margin: 0; color: #208caa; font-size: 20px;">${settings.attendanceTitle}</h2><div style="display: flex; justify-content: center; gap: 20px; margin-top: 5px; font-size: 16px; font-weight: 800;"><span>اللجنة: ${committee.name}</span><span>|</span><span>المقر: ${committee.location || '___'}</span></div></div><table><thead><tr>${settings.showColSequence ? `<th style="width: 30px;">${settings.colSequence}</th>` : ''}${settings.showColSeatId ? `<th style="width: 80px;">${settings.colSeatId}</th>` : ''}${settings.showColName ? `<th>${settings.colName}</th>` : ''}${settings.showColStage ? `<th style="width: 100px;">${settings.colStage}</th>` : ''}${settings.showColPresence ? `<th style="width: 60px;">${settings.colPresence}</th>` : ''}${settings.showColSignature ? `<th style="width: 100px;">${settings.colSignature}</th>` : ''}</tr></thead><tbody>${rows}</tbody></table><div style="margin-top: 40px; display: flex; justify-content: space-between; font-weight: 800; font-size: 12px; text-align: center;"><div style="width: 30%;"><div>الملاحظ الأول</div><div style="margin-top: 20px;">..........................</div></div><div style="width: 30%;"><div>الملاحظ الثاني</div><div style="margin-top: 20px;">..........................</div></div><div style="width: 30%;"><div>مدير المدرسة</div><div style="margin-top: 20px;">..........................</div></div></div></div>`;
-    html += `<div class="page-break">${pageContent}</div>`;
-  });
-  openPrintWindow(html, 'portrait');
-};
-
-export const printSeatLabels = (data: AppData, settings: PrintSettings) => {
-  const cursors: Record<number, number> = {};
-  data.stages.forEach(s => cursors[s.id] = 0);
-  let html = '';
-  const ITEMS_PER_PAGE = 21;
-  data.committees.forEach(committee => {
-    const committeeStickers: any[] = [];
-    data.stages.forEach(stage => {
-      const count = committee.counts[stage.id] || 0;
-      if (count > 0) {
-        for (let i = 0; i < count; i++) {
-          const idx = cursors[stage.id]++;
-          const student = stage.students[idx] || { name: '...', studentId: '-' };
-          const seatNumber = stage.prefix + String(idx + 1).padStart(3, '0');
-          committeeStickers.push({ studentName: student.name, seatNumber: seatNumber, stageName: stage.name, committeeName: committee.name, location: committee.location });
-        }
-      }
-    });
-    if (committeeStickers.length === 0) return;
-    for (let i = 0; i < committeeStickers.length; i += ITEMS_PER_PAGE) {
-      const pageItems = committeeStickers.slice(i, i + ITEMS_PER_PAGE);
-      let cellsHtml = '';
-      pageItems.forEach(item => {
-        cellsHtml += `<div style="border: 1px dashed #aaa; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; text-align: center; padding: 4px; overflow: hidden; background: white; height: 100%;"><div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 2px;"><div style="font-size: 8px; text-align: right; line-height: 1.1; font-weight: 900;"><div>وزارة التعليم</div><div>${settings.schoolName || data.school.name}</div></div><img src="${settings.logoUrl}" style="height: 20px;"><div style="font-size: 8px; text-align: left; line-height: 1.1;"><div>${data.school.term}</div><div>${settings.stickerTitle}</div></div></div><div style="flex: 1; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 14px; line-height: 1.1; padding: 2px;">${item.studentName}</div><div style="background: #f0f0f0; display: flex; justify-content: space-between; align-items: center; font-size: 10px; padding: 2px 4px; border-radius: 4px; font-weight: bold;"><div>لجنة: <b>${item.committeeName}</b></div><div style="font-size: 14px; font-weight: 900; background: #fff; padding: 0 4px; border: 1px solid #ddd; border-radius: 3px;">${item.seatNumber}</div><div>${item.stageName}</div></div></div>`;
-      });
-      const remaining = ITEMS_PER_PAGE - pageItems.length;
-      for(let r=0; r<remaining; r++) { cellsHtml += `<div></div>`; }
-      html += `<div class="page-break" style="width: 100%; height: 98vh; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(7, 1fr); gap: 0; padding: 0;">${cellsHtml}</div>`;
-    }
-  });
-  if (html === '') { alert('لا يوجد طلاب لتوليد الملصقات.'); return; }
-  openPrintWindow(html, 'sticker');
 };
 
 export const printAbsenceRecord = (data: AppData, settings: PrintSettings, config?: DynamicReportConfig) => {

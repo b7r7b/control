@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Stage, Committee } from '../types';
-import { Plus, Trash2, Wand2, Calculator, RotateCcw, AlertCircle, ArrowLeftRight, CheckCircle2, Eraser, Split, Hash, Users } from 'lucide-react';
+import { Plus, Trash2, Wand2, Calculator, ArrowLeftRight, CheckCircle2, Eraser, Shuffle, Layers, Split, AlertCircle } from 'lucide-react';
 
 interface DistributionPanelProps {
   stages: Stage[];
@@ -9,12 +9,18 @@ interface DistributionPanelProps {
 }
 
 type DistMode = 'capacity' | 'count';
+type FillStrategy = 'sequential' | 'interleave' | 'separate';
 
 const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committees, onChange }) => {
   const [distMode, setDistMode] = useState<DistMode>('capacity');
   const [capacityInput, setCapacityInput] = useState('20');
   const [committeeCountInput, setCommitteeCountInput] = useState('10');
-  const [separateStages, setSeparateStages] = useState(false); // Default false to allow mixing as requested
+  
+  // Strategy: 
+  // sequential: Fill Stage 1 fully, then Stage 2... (Mixed in committee but sequential blocks)
+  // interleave: Round robin (S1, S2, S3, S1...) (Best for anti-cheating)
+  // separate: One stage per committee only
+  const [fillStrategy, setFillStrategy] = useState<FillStrategy>('interleave'); 
 
   // Calculate ranges for visualization (Alphabetical Order)
   const ranges = useMemo(() => {
@@ -126,12 +132,13 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
 
     let committeeCounter = 1;
 
-    if (separateStages) {
-        // Mode 1: Separate Stages (Do not mix stages in one committee)
+    // --- Distribution Logics ---
+    
+    if (fillStrategy === 'separate') {
+        // Mode: Separate (One stage per committee usually)
         for (const stage of stages) {
             while (remaining[stage.id] > 0) {
                 const take = Math.min(remaining[stage.id], capacity);
-                
                 const counts: Record<number, number> = {};
                 counts[stage.id] = take;
                 
@@ -146,28 +153,43 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
             }
         }
     } else {
-        // Mode 2: Sequential Mixing (Fill committee to capacity across stages)
-        // Correct logic: Keep creating committees until ALL students are distributed.
-        // In each committee, iterate stages to fill 'capacity'.
-        
+        // Shared Loop for Mixed Modes (Sequential or Interleave)
+        // We continue creating committees until everyone is assigned
         while (Object.values(remaining).reduce((a, b) => a + b, 0) > 0) {
            let currentCommSpace = capacity;
            const counts: Record<number, number> = {};
            
-           // We iterate through ALL stages to fill this single committee
-           for (const stage of stages) {
-             if (currentCommSpace <= 0) break; // Committee Full
-             
-             const r = remaining[stage.id];
-             if (r > 0) {
-               const take = Math.min(r, currentCommSpace);
-               counts[stage.id] = take;
-               remaining[stage.id] -= take;
-               currentCommSpace -= take;
-             }
+           if (fillStrategy === 'sequential') {
+               // Fill completely from S1, then remaining space from S2, etc.
+               for (const stage of stages) {
+                 if (currentCommSpace <= 0) break;
+                 const r = remaining[stage.id];
+                 if (r > 0) {
+                   const take = Math.min(r, currentCommSpace);
+                   counts[stage.id] = take;
+                   remaining[stage.id] -= take;
+                   currentCommSpace -= take;
+                 }
+               }
+           } else if (fillStrategy === 'interleave') {
+               // Anti-Cheating: Round Robin 1 by 1
+               // While we have space and have students
+               let addedInLoop = true;
+               while (currentCommSpace > 0 && addedInLoop) {
+                   addedInLoop = false;
+                   for (const stage of stages) {
+                       if (currentCommSpace > 0 && remaining[stage.id] > 0) {
+                           if (!counts[stage.id]) counts[stage.id] = 0;
+                           counts[stage.id]++;
+                           remaining[stage.id]--;
+                           currentCommSpace--;
+                           addedInLoop = true;
+                       }
+                   }
+               }
            }
            
-           // If we added anyone, push the committee
+           // Push Committee
            const totalInComm = capacity - currentCommSpace;
            if (totalInComm > 0) {
              newCommittees.push({
@@ -177,8 +199,7 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
                counts
              });
            } else {
-               // Safety break to prevent infinite loops if something goes wrong
-               break; 
+               break; // Safety
            }
         }
     }
@@ -231,10 +252,10 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
           
           <div className="flex flex-col md:flex-row flex-wrap gap-3 w-full xl:w-auto items-start xl:items-center justify-end">
              
-             {/* Mode Selector & Inputs */}
+             {/* Main Settings Box */}
              <div className="flex flex-col sm:flex-row items-center gap-2 bg-gray-50 rounded-xl p-2 border border-gray-200 w-full md:w-auto">
                 
-                {/* Mode Toggle */}
+                {/* 1. Mode: Capacity vs Count */}
                 <div className="flex bg-white rounded-lg p-1 border border-gray-200 shadow-sm">
                     <button 
                         onClick={() => setDistMode('capacity')}
@@ -250,7 +271,7 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
                     </button>
                 </div>
 
-                {/* Input based on Mode */}
+                {/* 2. Input Value */}
                 <div className="flex items-center gap-2">
                     {distMode === 'capacity' ? (
                         <>
@@ -271,26 +292,34 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
                                 onChange={(e) => setCommitteeCountInput(e.target.value)}
                                 className="w-14 text-center text-sm font-bold bg-white border border-gray-300 rounded p-1.5 focus:ring-1 focus:ring-primary outline-none"
                              />
-                             <span className="text-[10px] text-gray-400 font-mono">
-                                ({Math.ceil(totalStudents / (parseInt(committeeCountInput) || 1))} ط/ل)
-                             </span>
                         </>
                     )}
                 </div>
 
-                {/* Separate Toggle */}
                 <div className="h-6 w-px bg-gray-300 mx-1 hidden sm:block"></div>
-                <label className="flex items-center gap-1.5 cursor-pointer px-1 select-none">
-                    <input 
-                        type="checkbox" 
-                        checked={separateStages} 
-                        onChange={(e) => setSeparateStages(e.target.checked)}
-                        className="rounded text-secondary focus:ring-secondary w-4 h-4"
-                    />
-                    <span className="text-[10px] font-bold text-gray-600">فصل المراحل</span>
-                </label>
 
-                {/* Action Button */}
+                {/* 3. Distribution Strategy */}
+                <div className="flex items-center gap-1">
+                    <span className="text-[10px] font-bold text-gray-500">النمط:</span>
+                    <div className="relative group">
+                        <select 
+                            value={fillStrategy}
+                            onChange={(e) => setFillStrategy(e.target.value as FillStrategy)}
+                            className="appearance-none bg-white border border-gray-300 text-gray-700 py-1.5 pr-8 pl-2 rounded-lg text-[10px] font-bold focus:outline-none focus:ring-1 focus:ring-primary"
+                        >
+                            <option value="interleave">دمج متداخل (منع الغش)</option>
+                            <option value="sequential">دمج متتابع (توفير اللجان)</option>
+                            <option value="separate">فصل المراحل (كل مرحلة بلجنة)</option>
+                        </select>
+                        <div className="absolute left-2 top-1.5 pointer-events-none">
+                            {fillStrategy === 'interleave' && <Shuffle className="w-3 h-3 text-purple-500" />}
+                            {fillStrategy === 'sequential' && <Layers className="w-3 h-3 text-blue-500" />}
+                            {fillStrategy === 'separate' && <Split className="w-3 h-3 text-orange-500" />}
+                        </div>
+                    </div>
+                </div>
+
+                {/* 4. Execute Button */}
                 <button 
                   onClick={autoDistribute}
                   className="px-4 py-1.5 rounded-lg bg-secondary text-white text-xs font-bold hover:bg-opacity-90 shadow-sm flex items-center gap-2 transition w-full sm:w-auto justify-center"
@@ -423,7 +452,7 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
         
         <div className="mt-4 text-[10px] text-gray-400 flex gap-4">
              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> الأرقام أسفل كل خلية تمثل تسلسل الطلاب الأبجدي في اللجنة.</span>
-             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-secondary"></span> يمكنك تعديل أعداد الطلاب يدوياً وسيتم تحديث التسلسل تلقائياً.</span>
+             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-secondary"></span> عند اختيار "دمج متداخل"، يتم توزيع الطلاب بالتناوب (1،1،1..) في الطباعة لمنع الغش.</span>
         </div>
       </div>
     </div>

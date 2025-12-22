@@ -287,6 +287,13 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data }) => {
                  color="green" 
                  onClick={() => openReportConfig('attendance', settings.attendanceTitle, [])} 
               />
+               <ReportBtn 
+                 title="ملصقات الطاولات (3*7)" 
+                 subtitle="نموذج 21 ملصق (A4)" 
+                 icon={LayoutList} 
+                 color="green" 
+                 onClick={() => openReportConfig('seat_labels', settings.stickerTitle, [])} 
+              />
               <ReportBtn 
                  title="توزيع حسب الصفوف" 
                  subtitle="التوزيع على اللجان" 

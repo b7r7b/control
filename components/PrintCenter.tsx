@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AppData, PrintSettings, DynamicReportConfig } from '../types';
 import { 
   printDoorLabels, 
@@ -7,6 +7,7 @@ import {
   printStudentCountsReport,
   printInvigilatorAttendance,
   printAbsenceRecord,
+  printLateRecord,
   printQuestionEnvelopeOpening,
   printQuestionEnvelope,
   printAnswerEnvelope,
@@ -17,9 +18,10 @@ import {
   printEmptyCommittees,
   printDistributionByGrade,
   printViolationMinutes,
-  printSubCommitteeTasks
+  printSubCommitteeTasks,
+  printSubstituteInvigilatorRecord
 } from '../services/printService';
-import { Printer, Settings, Eye, EyeOff, Edit3, X, Users, ClipboardList, UserX, MailOpen, FolderOpen, FileCheck, FileStack, BookOpen, AlertCircle, List, UserMinus, ShieldAlert, FileText, LayoutList, PenTool } from 'lucide-react';
+import { Printer, Settings, Eye, EyeOff, Edit3, X, Users, ClipboardList, UserX, MailOpen, FolderOpen, FileCheck, FileStack, BookOpen, AlertCircle, List, UserMinus, ShieldAlert, FileText, LayoutList, PenTool, Search, User, Calendar, Book, Clock, UserCheck } from 'lucide-react';
 
 interface PrintCenterProps {
   data: AppData;
@@ -53,6 +55,72 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
 
   const [activeReport, setActiveReport] = useState<DynamicReportConfig | null>(null);
   const [invigilatorAssignments, setInvigilatorAssignments] = useState<Record<string, string>>({});
+  
+  // Student Selection State
+  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
+  const [studentSearchTerm, setStudentSearchTerm] = useState('');
+
+  // Exam Details State (Subject, Date, etc.)
+  const [examDetails, setExamDetails] = useState({
+      subject: '',
+      date: '',
+      day: '',
+      period: 'الأولى',
+      grade: '',
+      time: '', // Start Time
+      arrivalTime: '', // New: For Late Record
+      lateDuration: '' // New: For Late Record
+  });
+
+  // Substitute Invigilator State
+  const [substituteData, setSubstituteData] = useState({
+      reserveTeacher: '',
+      originalTeacher: '',
+      committeeId: '',
+      reason: ''
+  });
+
+  // Flatten all students with their calculated committee info
+  const allStudents = useMemo(() => {
+      const list: any[] = [];
+      data.stages.forEach(stage => {
+          stage.students.forEach((student, index) => {
+             // Find which committee this student belongs to based on counts
+             let committeeName = 'غير موزّع';
+             let committeeLocation = '';
+             
+             // Logic: Iterate committees, subtract counts until we find where this student index falls
+             let tempIndex = index;
+             for (const comm of data.committees) {
+                 const countInComm = comm.counts[stage.id] || 0;
+                 if (tempIndex < countInComm) {
+                     committeeName = comm.name;
+                     committeeLocation = comm.location;
+                     break;
+                 }
+                 tempIndex -= countInComm;
+             }
+
+             list.push({
+                 uniqueId: `${stage.id}-${index}`, // composite ID
+                 ...student,
+                 stageName: stage.name,
+                 committeeName,
+                 committeeLocation
+             });
+          });
+      });
+      return list;
+  }, [data]);
+
+  const filteredStudents = useMemo(() => {
+      if (!studentSearchTerm) return [];
+      return allStudents.filter(s => s.name.includes(studentSearchTerm) || s.studentId.includes(studentSearchTerm)).slice(0, 10);
+  }, [allStudents, studentSearchTerm]);
+
+  const selectedStudentData = useMemo(() => {
+      return allStudents.find(s => s.uniqueId === selectedStudentId);
+  }, [allStudents, selectedStudentId]);
 
   useEffect(() => {
       setSettings(prev => ({
@@ -71,6 +139,16 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
     if (field === 'agentName') onUpdateSchool('agentName', value);
   };
 
+  const handleDateChange = (dateVal: string) => {
+      if (!dateVal) {
+          setExamDetails(prev => ({ ...prev, date: '', day: '' }));
+          return;
+      }
+      const dateObj = new Date(dateVal);
+      const dayName = dateObj.toLocaleDateString('ar-SA', { weekday: 'long' });
+      setExamDetails(prev => ({ ...prev, date: dateVal, day: dayName }));
+  };
+
   const inputClass = "w-full rounded-xl border-gray-300 bg-gray-50 p-3 text-sm focus:ring-2 focus:ring-primary focus:border-transparent transition outline-none";
 
   const openReportConfig = (reportId: string, defaultTitle: string, defaultFields: {key: string, label: string}[]) => {
@@ -79,9 +157,19 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
       title: defaultTitle,
       fields: defaultFields.map(f => ({ ...f, visible: true }))
     });
+    
+    // Reset specific states
     if (reportId === 'invigilator_attendance' || reportId === 'invigilator_daily_list') {
         setInvigilatorAssignments({});
     }
+    
+    // Reset Student & Exam Data
+    setSelectedStudentId('');
+    setStudentSearchTerm('');
+    setExamDetails({ subject: '', date: '', day: '', period: 'الأولى', grade: '', time: '', arrivalTime: '', lateDuration: '' });
+    
+    // Reset Substitute Data
+    setSubstituteData({ reserveTeacher: '', originalTeacher: '', committeeId: '', reason: '' });
   };
 
   const toggleFieldVisibility = (key: string) => {
@@ -115,29 +203,31 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
       case 'empty_committees': printEmptyCommittees(data, settings); break;
       
       // Group 2
-      case 'attendance': printAttendance(data, settings); break;
+      case 'attendance': printAttendance(data, settings, activeReport); break;
       case 'unassigned_students': printUnassignedStudents(data, settings); break;
       case 'distribution_by_grade': printDistributionByGrade(data, settings); break;
-      case 'distribution_by_committee': printStudentCountsReport(data, settings, activeReport); break; // Re-use logic for now or custom
+      case 'distribution_by_committee': printStudentCountsReport(data, settings, activeReport); break; 
 
-      // Group 3
+      // Group 3 (Invigilators)
       case 'invigilator_distribution': printInvigilatorAttendance(data, settings, activeReport, invigilatorAssignments); break;
       case 'invigilator_daily_list': printInvigilatorAttendance(data, settings, activeReport, invigilatorAssignments); break;
 
-      // Group 4
+      // Group 4 (Admin)
       case 'answer_paper_receipt': printAnswerPaperReceipt(data, settings, activeReport); break;
-      case 'absence_daily': printAbsenceRecord(data, settings, activeReport); break; // Using single form logic for now
       case 'exam_paper_tracking': printExamPaperTracking(data, settings, activeReport); break;
-      case 'question_envelope_opening': printQuestionEnvelopeOpening(data, settings, activeReport); break;
-      case 'violation_minutes': printViolationMinutes(data, settings); break;
+      case 'question_envelope_opening': printQuestionEnvelopeOpening(data, settings, activeReport, examDetails); break;
       case 'sub_committee_tasks': printSubCommitteeTasks(data, settings); break;
-      
-      // Stickers
-      case 'seat_labels': printSeatLabels(data, settings); break;
-      
-      // Envelopes (Added for completeness though separate in list)
+      case 'substitute_invigilator': printSubstituteInvigilatorRecord(data, settings, activeReport, examDetails, substituteData); break;
       case 'question_envelope': printQuestionEnvelope(data, settings, activeReport); break;
       case 'answer_envelope': printAnswerEnvelope(data, settings, activeReport); break;
+
+      // Group 5 (Students Specific)
+      case 'absence_daily': printAbsenceRecord(data, settings, activeReport, selectedStudentData, examDetails); break; 
+      case 'student_late': printLateRecord(data, settings, activeReport, selectedStudentData, examDetails); break;
+      case 'violation_minutes': printViolationMinutes(data, settings, activeReport, selectedStudentData, examDetails); break;
+
+      // Stickers
+      case 'seat_labels': printSeatLabels(data, settings); break;
     }
   };
 
@@ -167,6 +257,11 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
     );
   };
 
+  const needsStudentSelect = activeReport && ['absence_daily', 'violation_minutes', 'student_late'].includes(activeReport.id);
+  const needsExamDetails = activeReport && ['absence_daily', 'violation_minutes', 'question_envelope_opening', 'student_late', 'substitute_invigilator'].includes(activeReport.id);
+  const isLateReport = activeReport?.id === 'student_late';
+  const isSubstituteReport = activeReport?.id === 'substitute_invigilator';
+
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-10">
       
@@ -182,12 +277,31 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
               <button onClick={() => setActiveReport(null)} className="text-gray-400 hover:text-red-500 transition"><X className="w-6 h-6" /></button>
             </div>
             <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              
+              {/* Title Input */}
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">عنوان التقرير</label>
                 <input type="text" value={activeReport.title} onChange={(e) => setActiveReport({...activeReport, title: e.target.value})} className={inputClass} />
               </div>
+
+              {/* Manager Name Input for specific reports */}
+              {(isLateReport || isSubstituteReport) && (
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 mt-4">
+                      <label className="block text-xs font-bold text-gray-500 mb-1 flex items-center gap-2">
+                           <PenTool className="w-3 h-3" /> اسم مدير المدرسة (للتوقيع)
+                      </label>
+                      <input 
+                          type="text" 
+                          value={settings.managerName} 
+                          onChange={(e) => handleSettingChange('managerName', e.target.value)} 
+                          className="w-full p-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-blue-500 bg-white"
+                          placeholder="الاسم الثلاثي..."
+                      />
+                  </div>
+              )}
               
-              {(activeReport.id.includes('invigilator')) && (
+              {/* Invigilator Assignment Logic */}
+              {(activeReport.id.includes('invigilator') && !isSubstituteReport) && (
                   <div className="bg-orange-50/50 rounded-xl p-4 border border-orange-100">
                       <h4 className="text-sm font-bold text-orange-800 mb-4 flex items-center gap-2"><Users className="w-4 h-4" /> توزيع المعلمين (للطباعة فقط)</h4>
                       <div className="max-h-48 overflow-y-auto pr-2 space-y-2">
@@ -204,8 +318,229 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
                   </div>
               )}
 
+              {/* Exam Details Section */}
+              {needsExamDetails && (
+                   <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-100">
+                       <h4 className="text-sm font-bold text-blue-800 mb-4 flex items-center gap-2">
+                           <Calendar className="w-4 h-4" /> بيانات الاختبار (للتعبئة الآلية)
+                       </h4>
+                       <div className="grid grid-cols-2 gap-3">
+                           {!isSubstituteReport && (
+                               <div>
+                                   <label className="block text-[10px] font-bold text-gray-500 mb-1">المادة</label>
+                                   <input 
+                                       type="text" 
+                                       className="w-full p-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-blue-500"
+                                       placeholder="مثال: الرياضيات"
+                                       value={examDetails.subject}
+                                       onChange={(e) => setExamDetails({...examDetails, subject: e.target.value})}
+                                   />
+                               </div>
+                           )}
+                           <div>
+                               <label className="block text-[10px] font-bold text-gray-500 mb-1">التاريخ</label>
+                               <input 
+                                   type="date" 
+                                   className="w-full p-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-blue-500 text-center"
+                                   value={examDetails.date}
+                                   onChange={(e) => handleDateChange(e.target.value)}
+                               />
+                           </div>
+                           <div>
+                               <label className="block text-[10px] font-bold text-gray-500 mb-1">اليوم</label>
+                               <input 
+                                   type="text" 
+                                   className="w-full p-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-blue-500"
+                                   placeholder="مثال: الأحد"
+                                   value={examDetails.day}
+                                   onChange={(e) => setExamDetails({...examDetails, day: e.target.value})}
+                               />
+                           </div>
+                            <div>
+                               <label className="block text-[10px] font-bold text-gray-500 mb-1">الفترة</label>
+                               <select 
+                                   className="w-full p-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-blue-500"
+                                   value={examDetails.period}
+                                   onChange={(e) => setExamDetails({...examDetails, period: e.target.value})}
+                               >
+                                   <option value="الأولى">الأولى</option>
+                                   <option value="الثانية">الثانية</option>
+                                   <option value="الثالثة">الثالثة</option>
+                               </select>
+                           </div>
+                           {!isSubstituteReport && (
+                               <>
+                                <div className="col-span-1">
+                                    <label className="block text-[10px] font-bold text-gray-500 mb-1">وقت بدء الاختبار</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full p-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-blue-500 text-center ltr"
+                                        placeholder="07:30"
+                                        value={examDetails.time}
+                                        onChange={(e) => setExamDetails({...examDetails, time: e.target.value})}
+                                    />
+                                </div>
+                                <div className="col-span-1">
+                                    <label className="block text-[10px] font-bold text-gray-500 mb-1">الصف / المستوى</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full p-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-blue-500"
+                                        placeholder="مثال: الصف الأول الثانوي"
+                                        value={examDetails.grade}
+                                        onChange={(e) => setExamDetails({...examDetails, grade: e.target.value})}
+                                    />
+                                </div>
+                               </>
+                           )}
+                           
+                           {/* Fields Specific to Late Report */}
+                           {isLateReport && (
+                               <>
+                                   <div className="col-span-1">
+                                       <label className="block text-[10px] font-bold text-red-500 mb-1">وقت حضور الطالب</label>
+                                       <input 
+                                           type="text" 
+                                           className="w-full p-2 text-sm border border-red-300 bg-red-50 rounded-lg outline-none focus:border-red-500 text-center ltr"
+                                           placeholder="07:40"
+                                           value={examDetails.arrivalTime}
+                                           onChange={(e) => setExamDetails({...examDetails, arrivalTime: e.target.value})}
+                                       />
+                                   </div>
+                                   <div className="col-span-1">
+                                       <label className="block text-[10px] font-bold text-red-500 mb-1">مقدار التأخر (دقيقة)</label>
+                                       <input 
+                                           type="text" 
+                                           className="w-full p-2 text-sm border border-red-300 bg-red-50 rounded-lg outline-none focus:border-red-500 text-center"
+                                           placeholder="10 دقائق"
+                                           value={examDetails.lateDuration}
+                                           onChange={(e) => setExamDetails({...examDetails, lateDuration: e.target.value})}
+                                       />
+                                   </div>
+                               </>
+                           )}
+                       </div>
+                   </div>
+              )}
+
+              {/* Substitute Invigilator Logic */}
+              {isSubstituteReport && (
+                  <div className="bg-purple-50/50 rounded-xl p-4 border border-purple-100 mt-4">
+                      <h4 className="text-sm font-bold text-purple-800 mb-4 flex items-center gap-2"><UserCheck className="w-4 h-4" /> بيانات التكليف (اختر من القوائم)</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-[10px] font-bold text-gray-500 mb-1">المعلم البديل (احتياط)</label>
+                              <select 
+                                className="w-full p-2 text-sm border border-purple-200 rounded-lg outline-none focus:border-purple-500 bg-white"
+                                value={substituteData.reserveTeacher}
+                                onChange={(e) => setSubstituteData({...substituteData, reserveTeacher: e.target.value})}
+                              >
+                                  <option value="">-- اختر المعلم البديل --</option>
+                                  {data.teachers.map((t, idx) => <option key={idx} value={t.name}>{t.name}</option>)}
+                              </select>
+                          </div>
+                          <div>
+                              <label className="block text-[10px] font-bold text-gray-500 mb-1">اللجنة (سيتم جلب المقر تلقائياً)</label>
+                              <select 
+                                className="w-full p-2 text-sm border border-purple-200 rounded-lg outline-none focus:border-purple-500 bg-white"
+                                value={substituteData.committeeId}
+                                onChange={(e) => setSubstituteData({...substituteData, committeeId: e.target.value})}
+                              >
+                                  <option value="">-- اختر رقم اللجنة --</option>
+                                  {data.committees.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                              </select>
+                          </div>
+                          <div>
+                              <label className="block text-[10px] font-bold text-gray-500 mb-1">المعلم الأساسي (الغائب/المعتذر)</label>
+                              <select 
+                                className="w-full p-2 text-sm border border-purple-200 rounded-lg outline-none focus:border-purple-500 bg-white"
+                                value={substituteData.originalTeacher}
+                                onChange={(e) => setSubstituteData({...substituteData, originalTeacher: e.target.value})}
+                              >
+                                  <option value="">-- اختر المعلم الأساسي --</option>
+                                  {data.teachers.map((t, idx) => <option key={idx} value={t.name}>{t.name}</option>)}
+                              </select>
+                          </div>
+                          <div>
+                              <label className="block text-[10px] font-bold text-gray-500 mb-1">سبب التكليف</label>
+                              <input 
+                                type="text"
+                                className="w-full p-2 text-sm border border-purple-200 rounded-lg outline-none focus:border-purple-500 bg-white"
+                                placeholder="مثال: غياب، تأخر، ظرف طارئ..."
+                                value={substituteData.reason}
+                                onChange={(e) => setSubstituteData({...substituteData, reason: e.target.value})}
+                              />
+                          </div>
+                      </div>
+                  </div>
+              )}
+
+              {/* Student Selection */}
+              {needsStudentSelect && (
+                   <div className="bg-purple-50/50 rounded-xl p-4 border border-purple-100 mt-4">
+                       <h4 className="text-sm font-bold text-purple-800 mb-4 flex items-center gap-2">
+                           <User className="w-4 h-4" /> تحديد الطالب (اختياري)
+                       </h4>
+                       <div className="relative">
+                           <div className="flex items-center border border-gray-300 rounded-xl bg-white overflow-hidden focus-within:ring-2 focus-within:ring-purple-500">
+                               <div className="px-3 text-gray-400"><Search className="w-4 h-4" /></div>
+                               <input 
+                                  type="text" 
+                                  className="w-full p-2.5 text-sm outline-none"
+                                  placeholder="ابحث عن اسم الطالب..."
+                                  value={studentSearchTerm}
+                                  onChange={(e) => setStudentSearchTerm(e.target.value)}
+                               />
+                               {selectedStudentId && (
+                                   <button onClick={() => { setSelectedStudentId(''); setStudentSearchTerm(''); }} className="px-3 text-red-500 hover:bg-red-50 h-full"><X className="w-4 h-4" /></button>
+                               )}
+                           </div>
+
+                           {/* Dropdown Results */}
+                           {studentSearchTerm && !selectedStudentId && (
+                               <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 max-h-40 overflow-y-auto">
+                                   {filteredStudents.length > 0 ? filteredStudents.map(s => (
+                                       <div 
+                                          key={s.uniqueId} 
+                                          className="p-2 hover:bg-purple-50 cursor-pointer text-sm border-b last:border-0"
+                                          onClick={() => {
+                                              setSelectedStudentId(s.uniqueId);
+                                              setStudentSearchTerm(s.name);
+                                          }}
+                                       >
+                                           <div className="font-bold text-gray-800">{s.name}</div>
+                                           <div className="flex justify-between text-xs text-gray-500 mt-1">
+                                               <span>{s.stageName}</span>
+                                               <span className="bg-gray-100 px-1 rounded">لجنة: {s.committeeName}</span>
+                                           </div>
+                                       </div>
+                                   )) : (
+                                       <div className="p-3 text-center text-xs text-gray-400">لا توجد نتائج</div>
+                                   )}
+                               </div>
+                           )}
+                           
+                           {/* Selected Student Info Card */}
+                           {selectedStudentData && (
+                               <div className="mt-3 bg-white p-3 rounded-lg border border-purple-200 flex justify-between items-center shadow-sm">
+                                   <div>
+                                       <div className="font-bold text-sm text-gray-800">{selectedStudentData.name}</div>
+                                       <div className="text-xs text-gray-500 mt-1">
+                                           رقم الجلوس: <span className="font-mono font-bold text-black">{selectedStudentData.studentId}</span>
+                                       </div>
+                                   </div>
+                                   <div className="text-center">
+                                       <div className="text-[10px] text-gray-400">اللجنة</div>
+                                       <div className="font-bold text-lg text-purple-700">{selectedStudentData.committeeName}</div>
+                                   </div>
+                               </div>
+                           )}
+                       </div>
+                   </div>
+              )}
+
+              {/* Field Visibility Config */}
               {activeReport.fields.length > 0 && (
-                  <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-100">
+                  <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-100 mt-4">
                     <h4 className="text-sm font-bold text-blue-800 mb-4">الأعمدة والحقول</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {activeReport.fields.map((field) => (
@@ -321,7 +656,14 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
                  subtitle="قوائم التحضير" 
                  icon={ClipboardList} 
                  color="green" 
-                 onClick={() => openReportConfig('attendance', settings.attendanceTitle, [])} 
+                 onClick={() => openReportConfig('attendance', 'كشف تحضير الطلاب', [
+                     {key: 'col_seq', label: 'م'},
+                     {key: 'col_seat', label: 'رقم الجلوس'},
+                     {key: 'col_name', label: 'اسم الطالب'},
+                     {key: 'col_stage', label: 'المرحلة'},
+                     {key: 'col_pres', label: 'حضور'},
+                     {key: 'col_sig', label: 'التوقيع'}
+                 ])} 
               />
                <ReportBtn 
                  title="ملصقات الطاولات (3*7)" 
@@ -354,30 +696,30 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
            </div>
         </div>
 
-        {/* Group 3: Invigilators */}
+        {/* Group 5: Student Affairs (New Section) */}
         <div>
-           <h3 className="text-lg font-bold text-gray-700 mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-orange-600" /> الملاحظين والمراقبة</h3>
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+           <h3 className="text-lg font-bold text-gray-700 mb-4 flex items-center gap-2"><User className="w-5 h-5 text-orange-600" /> نماذج وشؤون الطلاب</h3>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <ReportBtn 
-                 title="توزيع الملاحظين" 
-                 subtitle="على اللجان" 
-                 icon={Users} 
+                 title="الغياب اليومي" 
+                 subtitle="محضر غياب" 
+                 icon={UserX} 
                  color="orange" 
-                 onClick={() => openReportConfig('invigilator_distribution', 'توزيع الملاحظين على اللجان', [{key: 'col_comm_no', label: 'رقم اللجنة'}, {key: 'col_name', label: 'اسم الملاحظ'}])} 
+                 onClick={() => openReportConfig('absence_daily', 'كشف الغياب اليومي', [{key: 'lbl_student', label: 'الطالب'}, {key: 'lbl_id', label: 'رقم الجلوس'}, {key: 'lbl_comm', label: 'رقم اللجنة'}, {key: 'lbl_subject', label: 'المادة'}])} 
               />
               <ReportBtn 
-                 title="كشف الملاحظين اليومي" 
-                 subtitle="توقيع الحضور" 
-                 icon={ClipboardList} 
+                 title="تعهد تأخر طالب" 
+                 subtitle="تأخير أقل من 15 د" 
+                 icon={Clock} 
                  color="orange" 
-                 onClick={() => openReportConfig('invigilator_daily_list', 'كشف الملاحظين اليومي', [{key: 'col_name', label: 'الاسم'}, {key: 'col_sign', label: 'التوقيع'}])} 
+                 onClick={() => openReportConfig('student_late', 'تعهد طالب تأخر عن الاختبار', [])} 
               />
               <ReportBtn 
-                 title="مهام اللجان الفرعية" 
-                 subtitle="تعليمات الملاحظين" 
-                 icon={FileText} 
-                 color="orange" 
-                 onClick={() => openReportConfig('sub_committee_tasks', 'مهام اللجان', [])} 
+                 title="مخالفة الأنظمة" 
+                 subtitle="محضر غش" 
+                 icon={ShieldAlert} 
+                 color="red" 
+                 onClick={() => openReportConfig('violation_minutes', 'محضر مخالفة', [])} 
               />
            </div>
         </div>
@@ -391,14 +733,14 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
                  subtitle="نموذج الاستلام" 
                  icon={FileCheck} 
                  color="purple" 
-                 onClick={() => openReportConfig('answer_paper_receipt', 'كشف استلام أوراق الإجابة', [{key: 'col_comm', label: 'رقم اللجنة'}, {key: 'col_applicants', label: 'المتقدمون'}, {key: 'col_total', label: 'المجموع'}])} 
-              />
-              <ReportBtn 
-                 title="الغياب اليومي" 
-                 subtitle="محضر غياب" 
-                 icon={UserX} 
-                 color="purple" 
-                 onClick={() => openReportConfig('absence_daily', 'كشف الغياب اليومي', [{key: 'lbl_student', label: 'الطالب'}, {key: 'lbl_id', label: 'رقم الجلوس'}])} 
+                 onClick={() => openReportConfig('answer_paper_receipt', 'كشف استلام أوراق الإجابة', [
+                     {key: 'col_comm', label: 'رقم اللجنة'}, 
+                     {key: 'col_applicants', label: 'عدد الطلاب'}, 
+                     {key: 'col_present', label: 'الحاضرون'},
+                     {key: 'col_absent', label: 'الغائبون'},
+                     {key: 'col_total', label: 'أظرف الإجابة'},
+                     {key: 'col_notes', label: 'توقيع المستلم'}
+                 ])} 
               />
               <ReportBtn 
                  title="متابعة أوراق الإجابة" 
@@ -414,12 +756,12 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
                  color="purple" 
                  onClick={() => openReportConfig('question_envelope_opening', 'محضر فتح مظاريف الأسئلة', [])} 
               />
-              <ReportBtn 
-                 title="مخالفة الأنظمة" 
-                 subtitle="محضر غش" 
-                 icon={ShieldAlert} 
-                 color="red" 
-                 onClick={() => openReportConfig('violation_minutes', 'محضر مخالفة', [])} 
+               <ReportBtn 
+                 title="ملاحظ بديل" 
+                 subtitle="محضر دخول بديل" 
+                 icon={UserCheck} 
+                 color="purple" 
+                 onClick={() => openReportConfig('substitute_invigilator', 'محضر دخول معلم ملاحظ بديل', [])} 
               />
                <ReportBtn 
                  title="مظروف الأسئلة" 

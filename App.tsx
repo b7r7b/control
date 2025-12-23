@@ -9,7 +9,7 @@ import { Trash2, Printer, Settings2, Users, Database, ClipboardList, Edit, PlusC
 const STORAGE_KEY = 'ExamSystemData_v2';
 
 const INITIAL_DATA: AppData = {
-  school: { name: '', year: '', term: '' },
+  school: { name: '', year: '', term: '', managerName: '', agentName: '' },
   stages: [],
   committees: [],
   teachers: []
@@ -349,7 +349,7 @@ const App: React.FC = () => {
 
             {/* Step 5: Print Center */}
             <div className={step === AppStep.PRINT ? 'block animate-fade-in' : 'hidden'}>
-                <PrintCenter data={data} />
+                <PrintCenter data={data} onUpdateSchool={updateSchool} />
             </div>
 
         </main>

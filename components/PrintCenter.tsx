@@ -23,14 +23,15 @@ import { Printer, Settings, Eye, EyeOff, Edit3, X, Users, ClipboardList, UserX, 
 
 interface PrintCenterProps {
   data: AppData;
+  onUpdateSchool: (field: string, value: string) => void;
 }
 
-const PrintCenter: React.FC<PrintCenterProps> = ({ data }) => {
+const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
   const [settings, setSettings] = useState<PrintSettings>({
     adminName: 'الإدارة العامة للتعليم بمحافظة جدة',
     schoolName: data.school.name || 'ثانوية الأمير عبدالمجيد الأولى',
-    managerName: '',
-    agentName: '',
+    managerName: data.school.managerName || '',
+    agentName: data.school.agentName || '',
     logoUrl: 'https://salogos.org/wp-content/uploads/2021/11/UntiTtled-1.png',
     doorLabelTitle: 'بطاقة تعريف لجنة اختبار',
     attendanceTitle: 'كشف تحضير الطلاب',
@@ -54,13 +55,20 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data }) => {
   const [invigilatorAssignments, setInvigilatorAssignments] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (data.school.name) {
-        setSettings(prev => ({ ...prev, schoolName: data.school.name }));
-    }
-  }, [data.school.name]);
+      setSettings(prev => ({
+          ...prev,
+          schoolName: data.school.name || prev.schoolName,
+          managerName: data.school.managerName || prev.managerName,
+          agentName: data.school.agentName || prev.agentName
+      }));
+  }, [data.school]);
 
   const handleSettingChange = (field: keyof PrintSettings, value: any) => {
     setSettings(prev => ({ ...prev, [field]: value }));
+    
+    if (field === 'schoolName') onUpdateSchool('name', value);
+    if (field === 'managerName') onUpdateSchool('managerName', value);
+    if (field === 'agentName') onUpdateSchool('agentName', value);
   };
 
   const inputClass = "w-full rounded-xl border-gray-300 bg-gray-50 p-3 text-sm focus:ring-2 focus:ring-primary focus:border-transparent transition outline-none";
@@ -249,7 +257,7 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data }) => {
                 value={settings.managerName} 
                 onChange={(e) => handleSettingChange('managerName', e.target.value)} 
                 className={inputClass} 
-                placeholder="مثال: أ. محمد أحمد"
+                placeholder="مثال: أ. نايف الشهري"
             />
           </div>
           <div>
@@ -261,7 +269,7 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data }) => {
                 value={settings.agentName} 
                 onChange={(e) => handleSettingChange('agentName', e.target.value)} 
                 className={inputClass} 
-                placeholder="مثال: أ. خالد علي"
+                placeholder="مثال: أ. احمد القرني"
             />
           </div>
         </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AppData, ExamSchedule, DaySchedule, PeriodAssignment, Teacher } from '../types';
-import { Users, Wand2, Calendar, RotateCcw, ChevronDown, ChevronUp, MessageCircle, UserPlus, Upload, Trash2, X, ClipboardPaste, Printer, Share2, Send, CheckCircle, ExternalLink, Play, Square, Layers, Clock } from 'lucide-react';
+import { Users, Wand2, Calendar, RotateCcw, ChevronDown, ChevronUp, MessageCircle, UserPlus, Upload, Trash2, X, ClipboardPaste, Printer, Share2, Send, CheckCircle, ExternalLink, Play, Square, Layers, Clock, Edit2, Plus, Save } from 'lucide-react';
 import { readExcelFile, getSheetData } from '../services/excelService';
 
 interface Props {
@@ -25,6 +25,11 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
   const [newTeacherName, setNewTeacherName] = useState('');
   const [newTeacherPhone, setNewTeacherPhone] = useState('');
   
+  // Edit Teacher State
+  const [editingTeacherIdx, setEditingTeacherIdx] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+
   // Paste Modal State
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pastedContent, setPastedContent] = useState('');
@@ -93,13 +98,19 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
   // --- Date Helper ---
   const getDayLabel = (dayIndex: number) => {
       if (!startDate) {
-          return { name: `اليوم ${dayIndex + 1}`, date: '' };
+          return { name: `اليوم ${dayIndex + 1}`, date: '', hijri: '' };
       }
       const date = new Date(startDate);
       date.setDate(date.getDate() + dayIndex);
+      
+      const hijriDate = new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura', {
+          day: 'numeric', month: 'numeric', year: 'numeric'
+      }).format(date);
+
       return {
           name: date.toLocaleDateString('ar-SA', { weekday: 'long' }),
-          date: date.toLocaleDateString('ar-SA', { day: 'numeric', month: 'numeric', year: 'numeric' }) // Using numeric/gregorian for simplicity, usually prefer Hijri in SA context but input is Greg
+          date: date.toLocaleDateString('en-US', { day: 'numeric', month: 'numeric', year: 'numeric' }),
+          hijri: hijriDate
       };
   };
 
@@ -163,6 +174,47 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
       setNewTeacherName('');
       setNewTeacherPhone('');
     }
+  };
+
+  const startEditingTeacher = (idx: number) => {
+      setEditingTeacherIdx(idx);
+      setEditName(data.teachers[idx].name);
+      setEditPhone(data.teachers[idx].phone);
+  };
+
+  const saveEditedTeacher = () => {
+      if (editingTeacherIdx === null) return;
+      if (!editName.trim()) {
+          alert('الاسم مطلوب');
+          return;
+      }
+      
+      const oldName = data.teachers[editingTeacherIdx].name;
+      const updatedTeachers = [...data.teachers];
+      updatedTeachers[editingTeacherIdx] = { name: editName.trim(), phone: editPhone.trim() };
+      
+      onUpdateTeachers(updatedTeachers);
+
+      // Update Schedule References if Schedule Exists
+      if (schedule) {
+          const newSchedule = { ...schedule };
+          newSchedule.days.forEach(day => {
+              day.periods.forEach(p => {
+                  p.main = p.main.map(m => m === oldName ? editName.trim() : m);
+                  p.reserves = p.reserves.map(r => r === oldName ? editName.trim() : r);
+              });
+          });
+          setSchedule(newSchedule);
+          onSave(newSchedule);
+      }
+
+      setEditingTeacherIdx(null);
+      setEditName('');
+      setEditPhone('');
+  };
+
+  const cancelEdit = () => {
+      setEditingTeacherIdx(null);
   };
 
   const removeTeacher = (index: number) => {
@@ -348,8 +400,28 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
     const newSched = { ...schedule };
     const period = newSched.days[dayIdx].periods[periodIdx];
     if (type === 'main') period.main[arrayIdx] = newValue;
-    else if (newValue === '') period.reserves.splice(arrayIdx, 1);
-    else period.reserves[arrayIdx] = newValue;
+    else if (type === 'reserve') {
+        // If updating an existing reserve slot
+        period.reserves[arrayIdx] = newValue;
+    }
+    setSchedule(newSched);
+    onSave(newSched);
+  };
+
+  const addReserveSlot = (dayIdx: number, periodIdx: number) => {
+    if (!schedule) return;
+    const newSched = { ...schedule };
+    const period = newSched.days[dayIdx].periods[periodIdx];
+    period.reserves.push('');
+    setSchedule(newSched);
+    onSave(newSched);
+  };
+
+  const removeReserveSlot = (dayIdx: number, periodIdx: number, arrayIdx: number) => {
+    if (!schedule) return;
+    const newSched = { ...schedule };
+    const period = newSched.days[dayIdx].periods[periodIdx];
+    period.reserves.splice(arrayIdx, 1);
     setSchedule(newSched);
     onSave(newSched);
   };
@@ -366,22 +438,22 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
         const actualDayIndex = specificDayIdx !== null ? specificDayIdx : dIdx;
         const dayInfo = getDayLabel(actualDayIndex);
         
-        // Header HTML (Once per page)
+        // Header HTML - Compacted for space
         const headerHtml = `
-            <div style="display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 5px; margin-bottom: 10px; direction: rtl;">
-            <div style="text-align: right; width: 30%; font-size: 10px; line-height: 1.3; font-weight: 800; color: #000;">
-                <div>المملكة العربية السعودية</div>
-                <div>وزارة التعليم</div>
-                <div>إدارة التعليم</div>
-            </div>
-            <div style="text-align: center; width: 40%; display: flex; flex-direction: column; align-items: center;">
-                <img src="https://salogos.org/wp-content/uploads/2021/11/UntiTtled-1.png" style="height: 50px; object-fit: contain; margin-bottom: 3px; filter: grayscale(100%) contrast(120%);" alt="Logo">
-                <div style="font-size: 13px; font-weight: 900; text-decoration: underline; margin-top: 2px;">${data.school.name}</div>
-            </div>
-            <div style="text-align: left; width: 30%; font-size: 10px; line-height: 1.3; font-weight: 800; color: #000;">
-                <div>${data.school.term}</div>
-                <div>${data.school.year}</div>
-            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 10px; direction: rtl; height: 60px;">
+                <div style="text-align: right; width: 30%; font-size: 10px; line-height: 1.4; font-weight: 800;">
+                    <div>المملكة العربية السعودية</div>
+                    <div>وزارة التعليم</div>
+                    <div>الإدارة العامة للتعليم بمحافظة جدة</div>
+                </div>
+                <div style="text-align: center; width: 40%; display: flex; flex-direction: column; align-items: center;">
+                    <img src="https://salogos.org/wp-content/uploads/2021/11/UntiTtled-1.png" style="height: 45px; object-fit: contain; filter: grayscale(100%) contrast(120%);" alt="Logo">
+                    <div style="font-size: 12px; font-weight: 900; margin-top: 3px;">${data.school.name}</div>
+                </div>
+                <div style="text-align: left; width: 30%; font-size: 10px; line-height: 1.4; font-weight: 800;">
+                    <div>${data.school.term}</div>
+                    <div>${data.school.year}</div>
+                </div>
             </div>
         `;
 
@@ -389,101 +461,102 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
         let pageHtml = `
             <div style="page-break-after: always; direction: rtl; font-family: 'Tajawal', sans-serif;">
                 ${headerHtml}
-                <h2 style="text-align: center; margin-bottom: 10px; font-weight: 900; font-size: 16px;">توزيع الملاحظين على اللجان</h2>
-                
-                <!-- Day/Date Header Table -->
-                <table style="width: 100%; border-collapse: collapse; margin-bottom: 5px; border: 2px solid #000; text-align: center; font-size: 12px;">
-                    <tr style="background-color: #eee;">
-                        <td style="border: 1px solid #000; padding: 5px; font-weight: 900; width: 10%;">اليوم</td>
-                        <td style="border: 1px solid #000; padding: 5px; width: 40%;">${dayInfo.name}</td>
-                        <td style="border: 1px solid #000; padding: 5px; font-weight: 900; width: 10%;">التاريخ</td>
-                        <td style="border: 1px solid #000; padding: 5px; width: 40%;">${dayInfo.date || '....................'}</td>
-                    </tr>
-                </table>
+                <div style="display:flex; justify-content:space-between; align-items:center; background-color: #f5f5f5; border: 1px solid #000; padding: 4px 10px; margin-bottom: 5px; font-size: 11px;">
+                    <div style="font-weight: 900;">توزيع الملاحظين: ${dayInfo.name}</div>
+                    <div style="font-family: 'Times New Roman'; direction:ltr; font-weight:bold;">${dayInfo.date || ''} ${dayInfo.hijri ? `/ ${dayInfo.hijri} هـ` : ''}</div>
+                </div>
+
+                <!-- Main Matrix Table -->
+                <table style="width: 100%; border-collapse: collapse; font-size: 9px; text-align: center; border: 1px solid #000;">
+                    <thead>
+                        <tr style="background-color: #f0f0f0;">
+                            <th rowspan="2" style="border: 1px solid #000; padding: 2px; width: 30px;">اللجنة</th>
+                            <th rowspan="2" style="border: 1px solid #000; padding: 2px; width: 90px;">المقر</th>
         `;
-
-        // Iterate periods and append them to the same page
-        day.periods.forEach((period, pIdx) => {
-            const periodName = pIdx === 0 ? 'الأولى' : pIdx === 1 ? 'الثانية' : 'الثالثة';
-            
+        
+        // Dynamic Headers for Periods
+        day.periods.forEach((_, idx) => {
+            pageHtml += `<th colspan="2" style="border: 1px solid #000; padding: 2px; background:#e0e0e0;">الفترة ${idx + 1}</th>`;
+        });
+        
+        pageHtml += `</tr><tr style="background-color: #f0f0f0;">`;
+        
+        // Sub headers for each period
+        day.periods.forEach(() => {
             pageHtml += `
-                <div style="margin-top: 15px; border: 1px solid #000; padding: 5px; background: #fafafa;">
-                   <h3 style="margin: 0 0 5px 0; font-size: 12px; font-weight: 900; text-align: center; border-bottom: 1px solid #ccc; padding-bottom: 3px;">الفترة: ${periodName}</h3>
-                   <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: center; border: 1px solid #000;">
-                        <thead>
-                            <tr style="background-color: #f0f0f0;">
-                                <th style="border: 1px solid #000; padding: 3px; width: 50px;">رقم اللجنة</th>
-                                <th style="border: 1px solid #000; padding: 3px;">مقر اللجنة</th>
-                                <th style="border: 1px solid #000; padding: 3px; width: 40%;">اسم الملاحظ</th>
-                                <th style="border: 1px solid #000; padding: 3px; width: 15%;">التوقيع</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                <th style="border: 1px solid #000; padding: 2px;">اسم الملاحظ</th>
+                <th style="border: 1px solid #000; padding: 2px; width: 70px;">التوقيع</th>
             `;
+        });
+        
+        pageHtml += `</tr></thead><tbody>`;
 
-            // Print Committees for this Period
-            data.committees.forEach((comm, cIdx) => {
+        // 1. Data Rows (Committees)
+        data.committees.forEach((comm, cIdx) => {
+             pageHtml += `<tr>
+                <td style="border: 1px solid #000; padding: 1px; font-weight: bold; height: auto;">${comm.name}</td>
+                <td style="border: 1px solid #000; padding: 1px; white-space:normal; line-height:1.2;">${comm.location}</td>
+             `;
+             
+             // Loop through periods to get teachers for this committee
+             day.periods.forEach((period) => {
                 const teachers = [];
                 for(let k=0; k<schedule.teachersPerCommittee; k++) {
                     const t = period.main[(cIdx * schedule.teachersPerCommittee) + k];
                     if (t) teachers.push(t);
                 }
                 const teacherCell = teachers.length > 0 ? teachers.join(' - ') : '';
-
+                
                 pageHtml += `
-                    <tr style="height: 25px;">
-                        <td style="border: 1px solid #000; padding: 2px; font-weight: bold;">${comm.name}</td>
-                        <td style="border: 1px solid #000; padding: 2px;">${comm.location}</td>
-                        <td style="border: 1px solid #000; padding: 2px; font-weight: bold;">${teacherCell}</td>
-                        <td style="border: 1px solid #000; padding: 2px;"></td>
-                    </tr>
+                    <td style="border: 1px solid #000; padding: 3px; font-weight: bold; font-size:9px;">${teacherCell}</td>
+                    <td style="border: 1px solid #000; padding: 1px;"></td>
                 `;
-            });
+             });
+             
+             pageHtml += `</tr>`;
+        });
 
-            // Print Reserves for this Period
+        // 2. Reserve Row (Updated for Vertical listing)
+        pageHtml += `<tr style="background-color: #fffde7; border-top: 2px solid #000;">
+            <td colspan="2" style="border: 1px solid #000; padding: 5px; font-weight: 900; vertical-align:middle;">الاحتياط</td>
+        `;
+        
+        day.periods.forEach((period) => {
+            let periodHtml = `<table style="width: 100%; border-collapse: collapse; margin: 0; border: none; background: transparent;">`;
             if (period.reserves.length > 0) {
-                 period.reserves.forEach((res, rIdx) => {
-                     pageHtml += `
-                        <tr style="height: 25px; background-color: #fffde7;">
-                            <td style="border: 1px solid #000; padding: 2px; font-weight: bold;">احتياط</td>
-                            <td style="border: 1px solid #000; padding: 2px;">-</td>
-                            <td style="border: 1px solid #000; padding: 2px;">${res}</td>
-                            <td style="border: 1px solid #000; padding: 2px;"></td>
+                period.reserves.forEach((res, i) => {
+                    const borderBottom = i === period.reserves.length - 1 ? '' : 'border-bottom: 1px solid #ddd;';
+                    periodHtml += `
+                        <tr>
+                            <td style="padding: 4px; text-align: right; ${borderBottom} font-weight:bold; font-size:9px; border-left: 1px solid #000;">${res}</td>
+                            <td style="width: 70px; ${borderBottom}"></td>
                         </tr>
-                     `;
-                 });
+                    `;
+                });
             } else {
-                 pageHtml += `
-                    <tr style="height: 25px; background-color: #fffde7;">
-                        <td style="border: 1px solid #000; padding: 2px; font-weight: bold;">احتياط</td>
-                        <td style="border: 1px solid #000; padding: 2px;">-</td>
-                        <td style="border: 1px solid #000; padding: 2px;"></td>
-                        <td style="border: 1px solid #000; padding: 2px;"></td>
-                    </tr>
-                 `;
+                 periodHtml += `<tr><td style="padding: 4px; text-align:center; border-left: 1px solid #000;">-</td><td style="width: 70px;"></td></tr>`;
             }
+            periodHtml += `</table>`;
 
             pageHtml += `
-                        </tbody>
-                    </table>
-                </div>
+                <td colspan="2" style="border: 1px solid #000; padding: 0; vertical-align: top;">
+                    ${periodHtml}
+                </td>
             `;
-        }); // End Periods Loop
+        });
+        
+        pageHtml += `</tr></tbody></table>`;
 
         // Footer
         pageHtml += `
-                <div style="margin-top: 30px; display: flex; justify-content: space-between; font-weight: 800; font-size: 12px; padding: 0 20px;">
-                    <div style="text-align: center;">
-                        <div>مسؤول الجدول</div>
-                        <div style="margin-top: 25px;">..........................</div>
-                    </div>
+                <div style="margin-top: 20px; display: flex; justify-content: space-between; font-weight: 800; font-size: 11px; padding: 0 40px;">
                     <div style="text-align: center;">
                         <div>وكيل الشؤون التعليمية</div>
-                        <div style="margin-top: 25px;">..........................</div>
+                        <div style="margin-top: 25px;">${data.school.agentName || '..........................'}</div>
                     </div>
                     <div style="text-align: center;">
                         <div>مدير المدرسة</div>
-                        <div style="margin-top: 25px;">..........................</div>
+                        <div style="margin-top: 25px;">${data.school.managerName || '..........................'}</div>
                     </div>
                 </div>
             </div>
@@ -501,7 +574,8 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
                     <style>
                         body { margin: 0; padding: 0; background-color: #fff; }
                         @media print {
-                            @page { size: A4; margin: 10mm; }
+                            @page { size: A4 portrait; margin: 5mm; }
+                            body { zoom: 98%; }
                         }
                     </style>
                 </head>
@@ -542,7 +616,8 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
 
 ${tasks.join('\n')}
 
-مع التحية، إدارة ${data.school.name}`;
+مع التحية،
+إدارة ${data.school.name}`;
   };
 
   const openWhatsAppLink = (teacher: Teacher, dayIdx: number) => {
@@ -799,15 +874,45 @@ ${tasks.join('\n')}
 
                 <div className="max-h-40 overflow-y-auto border rounded-xl bg-gray-50 p-2 grid grid-cols-2 md:grid-cols-4 gap-2">
                     {data.teachers.length > 0 ? data.teachers.map((t, i) => (
-                        <div key={i} className="bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-xs font-bold text-gray-700 flex items-center justify-between shadow-sm group hover:border-orange-300">
-                             <div className="truncate">
-                                <div>{t.name}</div>
-                                {t.phone && <div className="text-[10px] text-gray-400 font-mono">{t.phone}</div>}
-                             </div>
-                             {/* VISIBILITY FIX: Removed opacity-0 group-hover:opacity-100 */}
-                             <button onClick={() => removeTeacher(i)} className="text-gray-300 hover:text-red-500 transition-colors">
-                                <X className="w-3 h-3" />
-                             </button>
+                        <div key={i} className={`bg-white border px-3 py-1.5 rounded-lg text-xs flex items-center justify-between shadow-sm group ${editingTeacherIdx === i ? 'border-blue-500 ring-1 ring-blue-300' : 'border-gray-200 hover:border-orange-300'}`}>
+                             {editingTeacherIdx === i ? (
+                                <div className="flex items-center gap-1 w-full">
+                                    <div className="flex flex-col gap-1 w-full">
+                                        <input 
+                                            value={editName}
+                                            onChange={(e) => setEditName(e.target.value)}
+                                            className="w-full text-xs p-1 border rounded"
+                                            placeholder="الاسم"
+                                            autoFocus
+                                        />
+                                        <input 
+                                            value={editPhone}
+                                            onChange={(e) => setEditPhone(e.target.value)}
+                                            className="w-full text-xs p-1 border rounded"
+                                            placeholder="الجوال"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <button onClick={saveEditedTeacher} className="text-green-600 hover:text-green-800"><Save className="w-4 h-4" /></button>
+                                        <button onClick={cancelEdit} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
+                                    </div>
+                                </div>
+                             ) : (
+                                <>
+                                    <div className="truncate flex-1">
+                                        <div className="font-bold text-gray-700">{t.name}</div>
+                                        {t.phone && <div className="text-[10px] text-gray-400 font-mono">{t.phone}</div>}
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <button onClick={() => startEditingTeacher(i)} className="text-gray-300 hover:text-blue-500 transition-colors">
+                                            <Edit2 className="w-3 h-3" />
+                                        </button>
+                                        <button onClick={() => removeTeacher(i)} className="text-gray-300 hover:text-red-500 transition-colors">
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                </>
+                             )}
                         </div>
                     )) : (
                         <div className="col-span-full text-center text-gray-400 py-4 text-xs">لا يوجد معلمين. أضف يدوياً أو قم بالاستيراد.</div>
@@ -999,13 +1104,33 @@ ${tasks.join('\n')}
                                         <td className="p-3 font-bold text-yellow-700 text-xs sticky right-0 bg-yellow-50/30 border-l z-10">الاحتياط</td>
                                         {schedule.days[activeDayIdx].periods.map((period, pIdx) => (
                                             <td key={pIdx} className="p-2 border-l align-top">
-                                                <div className="flex flex-wrap gap-1 justify-center">
+                                                <div className="flex flex-col gap-1 items-center">
                                                     {period.reserves.map((res, rIdx) => (
-                                                        <span key={rIdx} className="bg-white border border-yellow-200 text-gray-700 px-2 py-1 rounded-md text-[10px] shadow-sm flex items-center gap-1">
-                                                            {res}
-                                                        </span>
+                                                        <div key={rIdx} className="flex gap-1 w-full max-w-[200px]">
+                                                            <select
+                                                                value={res}
+                                                                onChange={(e) => handleManualChange(activeDayIdx, pIdx, 'reserve', rIdx, e.target.value)}
+                                                                className="flex-1 text-xs p-1.5 rounded border bg-white border-yellow-300 focus:ring-1 focus:ring-yellow-500"
+                                                            >
+                                                                <option value="" className="text-gray-300">-- فارغ --</option>
+                                                                {data.teachers.map((t, i) => (
+                                                                    <option key={i} value={t.name}>{t.name}</option>
+                                                                ))}
+                                                            </select>
+                                                            <button 
+                                                                onClick={() => removeReserveSlot(activeDayIdx, pIdx, rIdx)}
+                                                                className="text-red-400 hover:text-red-600 p-1"
+                                                            >
+                                                                <X className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
                                                     ))}
-                                                    {period.reserves.length === 0 && <span className="text-gray-400 text-[10px]">- لا يوجد -</span>}
+                                                    <button 
+                                                        onClick={() => addReserveSlot(activeDayIdx, pIdx)}
+                                                        className="mt-1 w-full max-w-[200px] text-[10px] bg-yellow-100 text-yellow-700 hover:bg-yellow-200 py-1 rounded border border-yellow-200 flex items-center justify-center gap-1"
+                                                    >
+                                                        <Plus className="w-3 h-3" /> إضافة احتياط
+                                                    </button>
                                                 </div>
                                             </td>
                                         ))}

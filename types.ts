@@ -25,6 +25,8 @@ export interface SchoolData {
   name: string;
   year: string;
   term: string;
+  managerName?: string;
+  agentName?: string;
 }
 
 // --- Schedule Types ---

@@ -41,7 +41,7 @@ const openPrintWindow = (content: string, orientation: 'portrait' | 'landscape' 
   
   // Determine CSS size based on orientation
   const sizeCss = orientation === 'sticker' ? 'A4' : `A4 ${orientation}`;
-  // For stickers, we force 0 margin on @page to handle physical margins manually in CSS
+  // For stickers, force 0 margin to allow edge-to-edge
   const marginCss = orientation === 'sticker' ? '0' : '5mm';
 
   w.document.open();
@@ -59,7 +59,7 @@ const openPrintWindow = (content: string, orientation: 'portrait' | 'landscape' 
             padding: 0; 
             background: #fff; 
             color: #000;
-            font-size: 10px; /* Reduced from 11px */
+            font-size: 10px; 
             font-weight: 700;
           }
           @media print {
@@ -73,18 +73,18 @@ const openPrintWindow = (content: string, orientation: 'portrait' | 'landscape' 
           table { width: 100%; border-collapse: collapse; margin-top: 5px; border: 2px solid #000; }
           th, td { 
             border: 1px solid #000; 
-            padding: 2px; /* Reduced from 3px 2px */
+            padding: 2px;
             text-align: center; 
-            font-size: 10px; /* Reduced from 11px */
+            font-size: 10px;
             font-weight: 700; 
             color: #000; 
           }
           th { background-color: #f0f0f0 !important; font-weight: 900; border-bottom: 2px solid #000; }
           
           /* Utility Classes */
-          h1 { font-size: 16px; font-weight: 900; margin: 5px 0; color: #000; } /* Reduced from 18px */
-          h2 { font-size: 14px; font-weight: 900; margin: 4px 0; color: #000; } /* Reduced from 15px */
-          h3 { font-size: 12px; font-weight: 800; margin: 3px 0; color: #000; } /* Reduced from 13px */
+          h1 { font-size: 16px; font-weight: 900; margin: 5px 0; color: #000; }
+          h2 { font-size: 14px; font-weight: 900; margin: 4px 0; color: #000; }
+          h3 { font-size: 12px; font-weight: 800; margin: 3px 0; color: #000; }
           
           .grid-container { width: 100%; }
           .form-box { border: 2px solid #000; padding: 10px; border-radius: 4px; margin-bottom: 15px; }
@@ -95,27 +95,25 @@ const openPrintWindow = (content: string, orientation: 'portrait' | 'landscape' 
           .grid-cell { flex: 1; border-left: 1px solid #000; padding: 2px; text-align: center; }
           .grid-cell:last-child { border-left: none; }
 
-          /* --- STICKER SPECIFIC STYLES (Avery L7160 / 3x7) --- */
+          /* --- STICKER SPECIFIC STYLES (Full Page / Edge-to-Edge) --- */
           .sticker-sheet {
              width: 210mm;
-             height: 297mm;
-             padding-top: 12.0mm; 
-             padding-left: 7.2mm; 
-             padding-right: 7.2mm; 
+             height: 296mm; /* Almost A4 height */
+             padding: 0;
+             margin: 0;
              box-sizing: border-box;
              display: grid;
-             grid-template-columns: 63.5mm 63.5mm 63.5mm;
-             grid-template-rows: repeat(7, 38.1mm);
-             column-gap: 2.5mm;
-             row-gap: 0mm;
+             grid-template-columns: repeat(3, 1fr);
+             grid-template-rows: repeat(7, 1fr);
+             gap: 0;
              page-break-after: always;
              overflow: hidden; 
           }
           
           .sticker-cell {
-             width: 63.5mm;
-             height: 38.1mm;
-             padding: 1mm 2mm; 
+             width: auto;
+             height: auto;
+             padding: 3mm; 
              box-sizing: border-box;
              overflow: hidden;
              display: flex;
@@ -123,6 +121,7 @@ const openPrintWindow = (content: string, orientation: 'portrait' | 'landscape' 
              justify-content: space-between;
              text-align: center;
              background: white;
+             border: 1px dotted #ccc; /* Cut guide */
           }
           
           /* Warning message for print settings */
@@ -135,7 +134,7 @@ const openPrintWindow = (content: string, orientation: 'portrait' | 'landscape' 
         </style>
       </head>
       <body>
-        ${orientation === 'sticker' ? '<div class="print-warning no-print">تنبيه: تأكد من ضبط إعدادات الطابعة (Scale) على 100% وإلغاء خيار (Fit to Page) لضمان دقة الملصقات.</div>' : ''}
+        ${orientation === 'sticker' ? '<div class="print-warning no-print">تنبيه: تم ضبط الملصقات على كامل الصفحة (بدون هوامش). يرجى التأكد من إعدادات الطابعة (Margins: None / Minimum).</div>' : ''}
         ${content}
         <script>
            window.onload = function() {
@@ -344,74 +343,79 @@ export const printSeatLabels = (data: AppData, settings: PrintSettings) => {
   let html = '';
   const ITEMS_PER_PAGE = 21; 
   
+  // Logic: Print Committee by Committee
   data.committees.forEach(committee => {
-    const committeeStickers: any[] = [];
-    
-    data.stages.forEach(stage => {
-        const count = committee.counts[stage.id] || 0;
-        for(let i=0; i<count; i++) {
-            const idx = cursors[stage.id]++;
-            const student = stage.students[idx] || { name: '...', studentId: '-' };
-            const seatNumber = stage.prefix + String(idx + 1).padStart(3, '0');
-            
-            committeeStickers.push({ 
-                studentName: student.name, 
-                seatNumber: seatNumber, 
-                stageName: stage.name, 
-                committeeName: committee.name, 
-                location: committee.location 
-            });
-        }
-    });
-    
-    if (committeeStickers.length === 0) return;
-    
-    for (let i = 0; i < committeeStickers.length; i += ITEMS_PER_PAGE) {
-      const pageItems = committeeStickers.slice(i, i + ITEMS_PER_PAGE);
-      let cellsHtml = '';
+      const committeeStickers: any[] = [];
       
-      pageItems.forEach(item => {
-        cellsHtml += `
-          <div class="sticker-cell">
-             <div style="display: flex; align-items: center; justify-content: space-between; height: 12mm; border-bottom: 1px solid #ddd; padding-bottom: 1px;">
-                <div style="display:flex; align-items:center;">
-                   <img src="${settings.logoUrl}" style="height: 10mm; width: auto; max-width: 15mm; object-fit: contain; filter: grayscale(100%) contrast(120%);" />
-                </div>
-                <div style="flex: 1; text-align: center; font-size: 8px; font-weight: 800; line-height: 1.1; overflow: hidden; max-height: 100%;">
-                    <div>المملكة العربية السعودية</div>
-                    <div>وزارة التعليم</div>
-                    <div style="font-weight: 900;">${settings.schoolName || data.school.name}</div>
-                </div>
-             </div>
-             
-             <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
-                 <div style="font-weight: 900; font-size: 14px; line-height: 1.2; color: #000; text-align: center; overflow: hidden; max-height: 2.4em;">
-                    ${item.studentName}
-                 </div>
-             </div>
-             
-             <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #000; padding-top: 2px;">
-                 <div style="text-align: right;">
-                    <span style="font-size: 8px;">اللجنة:</span>
-                    <span style="font-size: 12px; font-weight: 900;">${item.committeeName}</span>
-                 </div>
-                 <div style="text-align: left;">
-                    <span style="font-size: 8px;">جلوس:</span>
-                    <span style="font-size: 14px; font-weight: 900;">${item.seatNumber}</span>
-                 </div>
-             </div>
-             <div style="font-size: 7px; text-align: center; margin-top: -2px;">${item.stageName}</div>
-          </div>`;
+      data.stages.forEach(stage => {
+          const count = committee.counts[stage.id] || 0;
+          for(let i=0; i<count; i++) {
+              const idx = cursors[stage.id]++;
+              const student = stage.students[idx] || { name: '...', studentId: '-' };
+              const seatNumber = stage.prefix + String(idx + 1).padStart(3, '0');
+              
+              committeeStickers.push({ 
+                  studentName: student.name, 
+                  seatNumber: seatNumber, 
+                  stageName: stage.name, 
+                  committeeName: committee.name, 
+                  location: committee.location 
+              });
+          }
       });
-      
-      const remaining = ITEMS_PER_PAGE - pageItems.length;
-      for(let r=0; r<remaining; r++) { cellsHtml += `<div class="sticker-cell"></div>`; }
-      
-      html += `
-        <div class="sticker-sheet">
-           ${cellsHtml}
-        </div>`;
-    }
+
+      if (committeeStickers.length === 0) return;
+
+      // Paginate this committee to ensure page breaks
+      for (let i = 0; i < committeeStickers.length; i += ITEMS_PER_PAGE) {
+          const pageItems = committeeStickers.slice(i, i + ITEMS_PER_PAGE);
+          let cellsHtml = '';
+          
+          pageItems.forEach(item => {
+            cellsHtml += `
+              <div class="sticker-cell">
+                 <div style="display: flex; align-items: center; justify-content: space-between; height: 12mm; border-bottom: 1px solid #ddd; padding-bottom: 1px;">
+                    <div style="display:flex; align-items:center;">
+                       <img src="${settings.logoUrl}" style="height: 10mm; width: auto; max-width: 15mm; object-fit: contain; filter: grayscale(100%) contrast(120%);" />
+                    </div>
+                    <div style="flex: 1; text-align: center; font-size: 8px; font-weight: 800; line-height: 1.1; overflow: hidden; max-height: 100%;">
+                        <div>المملكة العربية السعودية</div>
+                        <div>وزارة التعليم</div>
+                        <div style="font-weight: 900;">${settings.schoolName || data.school.name}</div>
+                    </div>
+                 </div>
+                 
+                 <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
+                     <div style="font-weight: 900; font-size: 14px; line-height: 1.2; color: #000; text-align: center; overflow: hidden; max-height: 2.4em;">
+                        ${item.studentName}
+                     </div>
+                 </div>
+                 
+                 <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #000; padding-top: 3px; font-size: 10px; font-weight:bold;">
+                     <div style="flex:1; text-align: right;">
+                        <span style="font-size: 8px;">جلوس:</span>
+                        <span style="font-size: 12px; font-weight: 900;">${item.seatNumber}</span>
+                     </div>
+                     <div style="flex:2; text-align: center; white-space:nowrap; overflow:hidden;">
+                        ${item.stageName}
+                     </div>
+                     <div style="flex:1; text-align: left;">
+                        <span style="font-size: 8px;">اللجنة:</span>
+                        <span style="font-size: 12px; font-weight: 900;">${item.committeeName}</span>
+                     </div>
+                 </div>
+              </div>`;
+          });
+          
+          // Fill remaining
+          const remaining = ITEMS_PER_PAGE - pageItems.length;
+          for(let r=0; r<remaining; r++) { cellsHtml += `<div class="sticker-cell"></div>`; }
+          
+          html += `
+            <div class="sticker-sheet">
+               ${cellsHtml}
+            </div>`;
+      }
   });
   
   if (html === '') { alert('لا يوجد طلاب لتوليد الملصقات.'); return; }

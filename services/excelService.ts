@@ -19,7 +19,7 @@ export const getSheetData = (workbook: XLSX.WorkBook, sheetName: string): any[][
   return XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 };
 
-export const parseStudents = (data: any[][], mapping: { nameIdx: number; idIdx: number; gradeIdx: number; classIdx: number }, headerRowIndex: number = 0): Student[] => {
+export const parseStudents = (data: any[][], mapping: { nameIdx: number; idIdx: number; gradeIdx: number; classIdx: number; phoneIdx?: number }, headerRowIndex: number = 0): Student[] => {
   const students: Student[] = [];
   
   // Start from headerRowIndex + 1 to skip the header row itself
@@ -36,6 +36,7 @@ export const parseStudents = (data: any[][], mapping: { nameIdx: number; idIdx: 
         studentId: mapping.idIdx !== -1 ? String(row[mapping.idIdx] || '') : '',
         grade: mapping.gradeIdx !== -1 ? String(row[mapping.gradeIdx] || '').trim() : '',
         class: mapping.classIdx !== -1 ? String(row[mapping.classIdx] || '').trim() : '',
+        phone: (mapping.phoneIdx !== undefined && mapping.phoneIdx !== -1) ? String(row[mapping.phoneIdx] || '').trim() : '',
       });
     }
   }
@@ -44,4 +45,16 @@ export const parseStudents = (data: any[][], mapping: { nameIdx: number; idIdx: 
   return students.sort((a, b) => {
     return a.name.localeCompare(b.name, 'ar');
   });
+};
+
+export const exportToExcel = (data: any[], fileName: string) => {
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  
+  // Adjust column width slightly for better readability
+  const wscols = Object.keys(data[0] || {}).map(() => ({ wch: 20 }));
+  ws['!cols'] = wscols;
+
+  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+  XLSX.writeFile(wb, `${fileName}.xlsx`);
 };

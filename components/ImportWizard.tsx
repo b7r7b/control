@@ -29,7 +29,8 @@ const ImportWizard: React.FC<ImportWizardProps> = ({ onSave, onCancel }) => {
     nameIdx: -1,
     idIdx: -1,
     gradeIdx: -1,
-    classIdx: -1
+    classIdx: -1,
+    phoneIdx: -1
   });
 
   const [previewData, setPreviewData] = useState<Student[]>([]);
@@ -37,7 +38,7 @@ const ImportWizard: React.FC<ImportWizardProps> = ({ onSave, onCancel }) => {
 
   // Helper: Detect the best header row based on keywords
   const detectHeaderRow = (data: any[][]): number => {
-    const keywords = ['اسم', 'name', 'طالب', 'student', 'جلوس', 'id', 'فصل', 'class', 'صف', 'grade', 'مستوى'];
+    const keywords = ['اسم', 'name', 'طالب', 'student', 'جلوس', 'id', 'فصل', 'class', 'صف', 'grade', 'مستوى', 'جوال', 'mobile', 'phone'];
     let bestRow = 0;
     let maxScore = 0;
 
@@ -101,13 +102,14 @@ const ImportWizard: React.FC<ImportWizardProps> = ({ onSave, onCancel }) => {
       setHeaders(heads);
       
       // Auto-map columns
-      const newMapping = { nameIdx: -1, idIdx: -1, gradeIdx: -1, classIdx: -1 };
+      const newMapping = { nameIdx: -1, idIdx: -1, gradeIdx: -1, classIdx: -1, phoneIdx: -1 };
       heads.forEach((h, i) => {
         const text = h.toLowerCase();
         if (text.includes('اسم')) newMapping.nameIdx = i;
         else if (text.includes('رقم') || text.includes('جلوس') || text.includes('هوية') || text.includes('id')) newMapping.idIdx = i;
         else if (text.includes('صف') || text.includes('مستوى') || text.includes('مرحله') || text.includes('grade')) newMapping.gradeIdx = i;
         else if (text.includes('فصل') || text.includes('شعبة') || text.includes('class')) newMapping.classIdx = i;
+        else if (text.includes('جوال') || text.includes('هاتف') || text.includes('phone') || text.includes('mobile')) newMapping.phoneIdx = i;
       });
       setMapping(newMapping);
   };
@@ -266,12 +268,13 @@ const ImportWizard: React.FC<ImportWizardProps> = ({ onSave, onCancel }) => {
         <h4 className="text-xs font-bold text-gray-600 mb-3 flex items-center gap-2">
           <Layers className="w-4 h-4" /> مطابقة الأعمدة (تأكد من اختيار صف العناوين الصحيح أعلاه)
         </h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
             { label: 'الاسم (مطلوب)', key: 'nameIdx', required: true },
             { label: 'رقم الطالب', key: 'idIdx', required: false },
             { label: 'الصف', key: 'gradeIdx', required: false },
             { label: 'الفصل', key: 'classIdx', required: false },
+            { label: 'رقم الجوال (اختياري)', key: 'phoneIdx', required: false },
           ].map((field) => (
             <div key={field.key}>
               <label className={`block text-[10px] font-bold mb-1 ${field.required ? 'text-blue-700' : 'text-gray-500'}`}>
@@ -336,6 +339,7 @@ const ImportWizard: React.FC<ImportWizardProps> = ({ onSave, onCancel }) => {
                   <th className="p-2 font-medium">رقم الجلوس</th>
                   <th className="p-2 font-medium text-blue-600">الصف</th>
                   <th className="p-2 font-medium text-purple-600">الفصل</th>
+                  <th className="p-2 font-medium text-gray-600">الجوال</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -345,12 +349,13 @@ const ImportWizard: React.FC<ImportWizardProps> = ({ onSave, onCancel }) => {
                     <td className="p-2 font-bold text-gray-700 border-l">{s.name}</td>
                     <td className="p-2 text-gray-500 border-l font-mono">{s.studentId}</td>
                     <td className="p-2 text-blue-600 border-l font-medium">{s.grade}</td>
-                    <td className="p-2 text-purple-600 font-medium">{s.class}</td>
+                    <td className="p-2 text-purple-600 border-l font-medium">{s.class}</td>
+                    <td className="p-2 text-gray-600 font-mono">{s.phone}</td>
                   </tr>
                 ))}
                 {previewData.length > 50 && (
                   <tr>
-                    <td colSpan={5} className="p-3 text-center text-gray-400 bg-gray-50">
+                    <td colSpan={6} className="p-3 text-center text-gray-400 bg-gray-50">
                         ...و {previewData.length - 50} آخرين
                     </td>
                   </tr>

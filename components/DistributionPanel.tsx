@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Stage, Committee } from '../types';
-import { Plus, Trash2, Wand2, Calculator, ArrowLeftRight, CheckCircle2, Eraser, Shuffle, Layers, Split, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Wand2, Calculator, ArrowLeftRight, CheckCircle2, Eraser, Shuffle, Layers, Split, AlertCircle, FileDown } from 'lucide-react';
+import { exportToExcel } from '../services/excelService';
 
 interface DistributionPanelProps {
   stages: Stage[];
@@ -207,6 +208,55 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
     onChange(newCommittees);
   };
 
+  const handleExportExcel = () => {
+    if (committees.length === 0) {
+        alert('لا توجد بيانات لجان لتصديرها.');
+        return;
+    }
+
+    const rows: any[] = [];
+    const cursors: Record<number, number> = {};
+    stages.forEach(s => cursors[s.id] = 0);
+
+    // Iterate committees to reconstruct the student distribution
+    committees.forEach(comm => {
+        stages.forEach(stage => {
+            const count = comm.counts[stage.id] || 0;
+            if (count > 0) {
+                const startIndex = cursors[stage.id];
+                const endIndex = startIndex + count;
+                
+                // Safety check
+                if (startIndex < stage.students.length) {
+                    const assignedStudents = stage.students.slice(startIndex, endIndex);
+                    
+                    assignedStudents.forEach(st => {
+                        rows.push({
+                            'اللجنة': comm.name,
+                            'المقر': comm.location,
+                            'اسم الطالب': st.name,
+                            'رقم الجلوس': st.studentId,
+                            'المرحلة': stage.name,
+                            'الصف': st.grade || '',
+                            'الفصل': st.class || '',
+                            'رقم الجوال': st.phone || '' // New Field
+                        });
+                    });
+                }
+                
+                cursors[stage.id] = endIndex;
+            }
+        });
+    });
+
+    if (rows.length === 0) {
+        alert('لم يتم توزيع أي طلاب على اللجان بعد.');
+        return;
+    }
+
+    exportToExcel(rows, `توزيع_اللجان_${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}`);
+  };
+
   // Helper to calculate totals
   const getStageDistributedCount = (stageId: number) => {
     return committees.reduce((acc, c) => acc + (c.counts[stageId] || 0), 0);
@@ -330,6 +380,14 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
 
              {/* Manual Actions */}
              <div className="flex gap-2 w-full md:w-auto justify-end">
+                <button 
+                  onClick={handleExportExcel}
+                  className="px-3 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700 shadow-md shadow-green-200 text-xs font-bold flex items-center gap-1 transition"
+                  title="تصدير التوزيع لملف Excel"
+                >
+                  <FileDown className="w-4 h-4" /> تصدير اكسل
+                </button>
+
                 <button 
                   onClick={addCommittee}
                   className="px-3 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs font-bold flex items-center gap-1 transition"

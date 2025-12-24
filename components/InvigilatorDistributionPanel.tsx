@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AppData, ExamSchedule, DaySchedule, PeriodAssignment, Teacher } from '../types';
-import { Users, Wand2, Calendar, RotateCcw, ChevronDown, ChevronUp, MessageCircle, UserPlus, Upload, Trash2, X, ClipboardPaste, Printer, Share2, Send, CheckCircle, ExternalLink, Play, Square, Layers, Clock, Edit2, Plus, Save } from 'lucide-react';
-import { readExcelFile, getSheetData } from '../services/excelService';
+import { Users, Wand2, Calendar, RotateCcw, ChevronDown, ChevronUp, MessageCircle, UserPlus, Upload, Trash2, X, ClipboardPaste, Printer, Share2, Send, CheckCircle, ExternalLink, Play, Square, Layers, Clock, Edit2, Plus, Save, FileDown } from 'lucide-react';
+import { readExcelFile, getSheetData, exportToExcel } from '../services/excelService';
 
 interface Props {
   data: AppData;
@@ -425,6 +425,58 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
     setSchedule(newSched);
     onSave(newSched);
   };
+  
+  const handleExportScheduleExcel = () => {
+    if (!schedule) {
+        alert('لا يوجد جدول لتصديره.');
+        return;
+    }
+
+    const rows: any[] = [];
+
+    schedule.days.forEach((day, dIdx) => {
+        const dayLabel = getDayLabel(dIdx);
+        day.periods.forEach((period, pIdx) => {
+           // Export Main Invigilators
+           period.main.forEach((teacherName, idx) => {
+              if (!teacherName) return;
+              const commIdx = Math.floor(idx / schedule.teachersPerCommittee);
+              const committee = data.committees[commIdx];
+              rows.push({
+                 'اليوم': dayLabel.name,
+                 'التاريخ': dayLabel.date,
+                 'الفترة': pIdx + 1,
+                 'اسم المعلم': teacherName,
+                 'نوع التكليف': 'أساسي',
+                 'رقم اللجنة': committee?.name || '?',
+                 'مقر اللجنة': committee?.location || ''
+              });
+           });
+
+           // Export Reserve Invigilators
+           period.reserves.forEach((teacherName) => {
+              if (!teacherName) return;
+              rows.push({
+                 'اليوم': dayLabel.name,
+                 'التاريخ': dayLabel.date,
+                 'الفترة': pIdx + 1,
+                 'اسم المعلم': teacherName,
+                 'نوع التكليف': 'احتياط',
+                 'رقم اللجنة': '-',
+                 'مقر اللجنة': 'عام'
+              });
+           });
+        });
+    });
+
+    if (rows.length === 0) {
+        alert('الجدول فارغ.');
+        return;
+    }
+
+    exportToExcel(rows, `جدول_الملاحظين_${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}`);
+  };
+
 
   // --- Output Functions (Print & WhatsApp) ---
 
@@ -990,6 +1042,13 @@ ${tasks.join('\n')}
                         title="إرسال الجداول عبر واتساب"
                     >
                         <Share2 className="w-4 h-4" /> واتساب
+                    </button>
+                    <button 
+                        onClick={handleExportScheduleExcel}
+                        className="bg-emerald-600 text-white px-3 py-2 rounded-xl font-bold shadow-md shadow-emerald-100 hover:bg-emerald-700 transition flex items-center gap-2 text-xs"
+                        title="تصدير الجدول إلى اكسل"
+                    >
+                        <FileDown className="w-4 h-4" /> اكسل
                     </button>
                     <button 
                         onClick={() => handlePrintSchedule(activeDayIdx)}

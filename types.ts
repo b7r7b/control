@@ -4,6 +4,7 @@ export interface Student {
   studentId: string;
   grade: string;
   class: string;
+  phone?: string; // New field
 }
 
 export interface Stage {

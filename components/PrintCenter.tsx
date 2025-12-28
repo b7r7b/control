@@ -20,7 +20,8 @@ import {
   printViolationMinutes,
   printSubCommitteeTasks,
   printSubstituteInvigilatorRecord,
-  printAnswerSubmissionList
+  printAnswerSubmissionList,
+  printCommitteeAnswerEnvelopes
 } from '../services/printService';
 import { Printer, Settings, Eye, EyeOff, Edit3, X, Users, ClipboardList, UserX, MailOpen, FolderOpen, FileCheck, FileStack, BookOpen, AlertCircle, List, UserMinus, ShieldAlert, FileText, LayoutList, PenTool, Search, User, Calendar, Book, Clock, UserCheck } from 'lucide-react';
 
@@ -227,6 +228,7 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
       case 'substitute_invigilator': printSubstituteInvigilatorRecord(data, settings, activeReport, examDetails, substituteData); break;
       case 'question_envelope': printQuestionEnvelope(data, settings, activeReport); break;
       case 'answer_envelope': printAnswerEnvelope(data, settings, activeReport); break;
+      case 'committee_answer_envelopes': printCommitteeAnswerEnvelopes(data, settings); break;
       
       // NEW REPORT
       case 'answer_submission_list': printAnswerSubmissionList(data, settings, activeReport, examDetails); break;
@@ -816,6 +818,13 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
                  icon={FolderOpen} 
                  color="purple" 
                  onClick={() => openReportConfig('answer_envelope', 'مظروف أصل الإجابة', [])} 
+              />
+              <ReportBtn 
+                 title="مظاريف الإجابة للجان" 
+                 subtitle="توزيع الصفوف" 
+                 icon={FolderOpen} 
+                 color="purple" 
+                 onClick={() => openReportConfig('committee_answer_envelopes', 'مظروف أوراق الإجابة', [])} 
               />
            </div>
         </div>

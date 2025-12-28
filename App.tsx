@@ -52,8 +52,25 @@ const App: React.FC = () => {
   };
 
   const handleSaveStage = (name: string, prefix: string, students: Student[]) => {
-    // Force sort alphabetically on save to ensure data integrity
-    const sortedStudents = [...students].sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+    // Helper to determine grade rank for sorting
+    const getGradeRank = (grade: string | undefined): number => {
+        const g = (grade || '').trim();
+        if (g.includes('أول') || g.includes('اول') || g.includes('1')) return 1;
+        if (g.includes('ثاني') || g.includes('2')) return 2;
+        if (g.includes('ثالث') || g.includes('3')) return 3;
+        return 99;
+    };
+
+    // Sort by Grade Rank first, then Alphabetical Name to maintain integrity
+    const sortedStudents = [...students].sort((a, b) => {
+        const rankA = getGradeRank(a.grade);
+        const rankB = getGradeRank(b.grade);
+
+        if (rankA !== rankB) {
+            return rankA - rankB;
+        }
+        return a.name.localeCompare(b.name, 'ar');
+    });
 
     // Fix: Generate a truly unique ID even if called in a loop
     const newStage: Stage = {

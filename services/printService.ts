@@ -13,10 +13,12 @@ const openPrintWindow = (content: string) => {
           <style>
             body { font-family: 'Tajawal', sans-serif; direction: rtl; margin: 0; padding: 0; background: #fff; }
             @media print {
-              @page { margin: 0.5cm; size: A4; }
+              @page { margin: 1cm 0.5cm; size: A4; } /* Reduced top/bottom margins specifically */
               body { -webkit-print-color-adjust: exact; }
               .page-break { page-break-after: always; }
               .no-print { display: none; }
+              thead { display: table-header-group; } 
+              tr { page-break-inside: avoid; }
             }
             table { width: 100%; border-collapse: collapse; border: 1px solid #000; }
             th, td { border: 1px solid #000; padding: 5px; text-align: center; font-size: 12px; }
@@ -61,6 +63,106 @@ const getField = (config: DynamicReportConfig | undefined, key: string, defaultL
 };
 
 // --- Exports ---
+
+export const printCommitteeAnswerEnvelopes = (data: AppData, settings: PrintSettings) => {
+    let content = '';
+    data.committees.forEach(committee => {
+        // Filter active stages for this committee
+        const activeStages = data.stages.filter(s => (committee.counts[s.id] || 0) > 0);
+        const totalStudents = Object.values(committee.counts).reduce((a, b) => a + b, 0);
+
+        if (totalStudents === 0) return; 
+
+        // Generate Rows for Grades
+        const gradesRows = activeStages.map(stage => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px dashed #ccc; margin-bottom: 10px;">
+                <span style="font-size: 26px; font-weight: bold; color: #333;">${stage.name}</span>
+                <span style="font-size: 32px; font-weight: 900; color: #000;">${committee.counts[stage.id]}</span>
+            </div>
+        `).join('');
+
+        content += `
+         <div class="page-break" style="height: 98vh; padding: 10px; box-sizing: border-box;">
+            <div style="border: 4px double #000; height: 100%; border-radius: 20px; padding: 30px; box-sizing: border-box; display: flex; flex-direction: column; background: #fff; position: relative; overflow: hidden;">
+                
+                ${getHeaderHTML(data.school, settings)}
+
+                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 30px; padding-top: 10px;">
+                    
+                    <!-- Creative Title -->
+                    <div style="
+                        background-color: #000; 
+                        color: #fff; 
+                        padding: 10px 50px; 
+                        font-size: 32px; 
+                        font-weight: 900; 
+                        border-radius: 10px;
+                        margin-bottom: 20px;
+                        box-shadow: 5px 5px 0px rgba(0,0,0,0.2);
+                    ">
+                        مظروف أوراق إجابة
+                    </div>
+
+                    <!-- Committee Info Box -->
+                    <div style="
+                        width: 100%; 
+                        background: #fdfdfd; 
+                        border: 3px solid #333; 
+                        border-radius: 15px; 
+                        padding: 20px 0; 
+                        text-align: center;
+                    ">
+                        <div style="font-size: 24px; color: #555; font-weight: bold;">لجنة رقم</div>
+                        <div style="font-size: 150px; line-height: 1; font-weight: 900; color: #000; margin: 10px 0;">${committee.name}</div>
+                        <div style="
+                            font-size: 28px; 
+                            font-weight: bold; 
+                            background: #eee; 
+                            display: inline-block; 
+                            padding: 5px 30px; 
+                            border-radius: 50px;
+                            border: 1px solid #999;
+                        ">
+                             المقر: ${committee.location}
+                        </div>
+                    </div>
+
+                    <!-- Students Breakdown -->
+                    <div style="width: 100%; margin-top: 20px;">
+                        <div style="text-align: right; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; display: inline-block; padding-bottom: 5px;">
+                            بيان أعداد الطلاب:
+                        </div>
+                        
+                        <div style="background: #fafafa; border: 1px solid #ddd; border-radius: 10px; padding: 10px;">
+                            ${gradesRows}
+                        </div>
+
+                        <div style="
+                            display: flex; 
+                            justify-content: space-between; 
+                            align-items: center; 
+                            margin-top: 20px; 
+                            background: #333; 
+                            color: #fff; 
+                            padding: 15px 30px; 
+                            border-radius: 10px;
+                        ">
+                            <span style="font-size: 28px; font-weight: 900;">الإجمالي الكلي للأوراق</span>
+                            <span style="font-size: 36px; font-weight: 900;">${totalStudents}</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                 <div style="width: 100%; text-align: center; margin-top: 20px; font-size: 14px; color: #666; border-top: 1px solid #eee; padding-top: 10px;">
+                    لجنة الاختبارات والتحكم
+                </div>
+            </div>
+         </div>
+        `;
+    });
+    openPrintWindow(content);
+};
 
 export const printDoorLabels = (data: AppData, settings: PrintSettings) => {
   let content = '';
@@ -144,7 +246,6 @@ export const printAttendance = (data: AppData, settings: PrintSettings, config?:
 
   let content = '';
   
-  // Re-implement correctly iterating through all
   const cursors: Record<number, number> = {};
   data.stages.forEach(s => cursors[s.id] = 0);
   
@@ -164,43 +265,66 @@ export const printAttendance = (data: AppData, settings: PrintSettings, config?:
     
     if (studentsInCommittee.length === 0) return;
 
+    // --- Auto-Fit Logic ---
+    const totalStudents = studentsInCommittee.length;
+    let fontSize = 12;
+    let padding = 5;
+
+    // Adjust sizes based on student count to fit A4
+    if (totalStudents > 25) {
+        fontSize = 10;
+        padding = 3;
+    } 
+    if (totalStudents > 35) {
+        fontSize = 9;
+        padding = 2;
+    }
+    // ---------------------
+
     let rows = '';
     studentsInCommittee.forEach((student, idx) => {
         rows += `
-            <tr style="height: 35px;">
-                ${fSeq.visible ? `<td>${idx + 1}</td>` : ''}
-                ${fSeat.visible ? `<td>${student.studentId}</td>` : ''}
-                ${fName.visible ? `<td style="text-align: right; padding-right: 10px;">${student.name}</td>` : ''}
-                ${fStage.visible ? `<td>${student.stageName}</td>` : ''}
-                ${fPres.visible ? `<td></td>` : ''}
-                ${fSig.visible ? `<td></td>` : ''}
+            <tr style="height: auto;">
+                ${fSeq.visible ? `<td style="width: 40px; padding: ${padding}px; font-size: ${fontSize}px;">${idx + 1}</td>` : ''}
+                ${fSeat.visible ? `<td style="width: 100px; padding: ${padding}px; font-size: ${fontSize}px;">${student.studentId}</td>` : ''}
+                ${fName.visible ? `<td style="text-align: right; padding: ${padding}px; font-size: ${fontSize}px; padding-right: 10px;">${student.name}</td>` : ''}
+                ${fStage.visible ? `<td style="width: 120px; padding: ${padding}px; font-size: ${fontSize}px;">${student.stageName}</td>` : ''}
+                ${fPres.visible ? `<td style="width: 80px; padding: ${padding}px; font-size: ${fontSize}px;"></td>` : ''}
+                ${fSig.visible ? `<td style="width: 120px; padding: ${padding}px; font-size: ${fontSize}px;"></td>` : ''}
             </tr>
         `;
     });
 
     content += `
-      <div class="page-break">
+      <div class="page-break" style="height: 100vh; display: flex; flex-direction: column;">
         ${getHeaderHTML(data.school, settings)}
-        <div style="text-align: center; margin-bottom: 10px;">
-           <h2>${config?.title || 'كشف تحضير الطلاب'}</h2>
-           <h3>لجنة رقم: ${committee.name} - مقر: ${committee.location}</h3>
+        
+        <div style="text-align: center; margin-bottom: 5px;">
+           <h2 style="font-size: 18px; font-weight: bold; margin: 5px 0;">${config?.title || 'كشف تحضير الطلاب'}</h2>
+           <div style="display: flex; justify-content: center; gap: 20px; font-size: 14px; font-weight: bold; border: 1px solid #000; padding: 5px; background: #f9f9f9; width: fit-content; margin: 0 auto 10px auto;">
+                <span>لجنة رقم: ${committee.name}</span>
+                <span>-</span>
+                <span>المقر: ${committee.location}</span>
+           </div>
         </div>
-        <table>
+        
+        <table style="flex: 1; height: auto;">
             <thead>
                 <tr>
-                    ${fSeq.visible ? `<th style="width: 50px;">${fSeq.label}</th>` : ''}
-                    ${fSeat.visible ? `<th style="width: 100px;">${fSeat.label}</th>` : ''}
-                    ${fName.visible ? `<th>${fName.label}</th>` : ''}
-                    ${fStage.visible ? `<th style="width: 120px;">${fStage.label}</th>` : ''}
-                    ${fPres.visible ? `<th style="width: 80px;">${fPres.label}</th>` : ''}
-                    ${fSig.visible ? `<th style="width: 120px;">${fSig.label}</th>` : ''}
+                    ${fSeq.visible ? `<th style="width: 40px; padding: ${padding}px; font-size: ${fontSize}px;">${fSeq.label}</th>` : ''}
+                    ${fSeat.visible ? `<th style="width: 100px; padding: ${padding}px; font-size: ${fontSize}px;">${fSeat.label}</th>` : ''}
+                    ${fName.visible ? `<th style="padding: ${padding}px; font-size: ${fontSize}px;">${fName.label}</th>` : ''}
+                    ${fStage.visible ? `<th style="width: 120px; padding: ${padding}px; font-size: ${fontSize}px;">${fStage.label}</th>` : ''}
+                    ${fPres.visible ? `<th style="width: 80px; padding: ${padding}px; font-size: ${fontSize}px;">${fPres.label}</th>` : ''}
+                    ${fSig.visible ? `<th style="width: 120px; padding: ${padding}px; font-size: ${fontSize}px;">${fSig.label}</th>` : ''}
                 </tr>
             </thead>
             <tbody>
                 ${rows}
             </tbody>
         </table>
-        <div style="margin-top: 30px; display: flex; justify-content: space-between; padding: 0 50px;">
+
+        <div style="margin-top: auto; padding-top: 20px; display: flex; justify-content: space-between; padding-left: 50px; padding-right: 50px; font-size: 12px; font-weight: bold;">
              <div>الملاحظ الأول: .............................. التوقيع: .............</div>
              <div>الملاحظ الثاني: .............................. التوقيع: .............</div>
         </div>
@@ -475,17 +599,88 @@ export const printQuestionEnvelope = (data: AppData, settings: PrintSettings, co
 
 export const printAnswerEnvelope = (data: AppData, settings: PrintSettings, config?: DynamicReportConfig) => {
     const content = `
-    <div style="padding: 20px; text-align: center; border: 3px solid #000; height: 90vh; display: flex; flex-direction: column; justify-content: center;">
-        ${getHeaderHTML(data.school, settings)}
-        <h1 style="font-size: 48px; margin: 30px 0;">ظرف أوراق إجابة</h1>
-        <div style="text-align: right; margin: 0 auto; width: 70%; font-size: 24px; line-height: 2.5;">
-            <p>المادة: ......................................................</p>
-            <p>الصف: ......................................................</p>
-            <p>رقم اللجنة: ......................................................</p>
-            <p>عدد الطلاب: ..............................</p>
-            <p>عدد الحاضرين: ..............................</p>
-            <p>عدد الغائبين: ..............................</p>
-            <p>اسم الملاحظ: .............................. التوقيع: .................</p>
+    <div class="page-break" style="
+        height: 98vh;
+        padding: 20px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    ">
+        <!-- Decorative Outer Border -->
+        <div style="
+            width: 100%;
+            height: 100%;
+            border: 4px double #000;
+            padding: 10px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        ">
+            <!-- Inner Border -->
+            <div style="
+                flex: 1;
+                border: 1px solid #000;
+                padding: 30px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            ">
+
+                <!-- Header -->
+                <div style="width: 100%; margin-bottom: 40px;">
+                    ${getHeaderHTML(data.school, settings)}
+                </div>
+
+                <!-- Title -->
+                <div style="
+                    background-color: #000;
+                    color: #fff;
+                    padding: 15px 60px;
+                    border-radius: 50px;
+                    font-size: 36px;
+                    font-weight: 900;
+                    margin-bottom: 80px;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                ">
+                    ظرف أوراق إجابة
+                </div>
+
+                <!-- Fields Section -->
+                <div style="
+                    width: 90%;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 60px; /* Big spacing */
+                    font-size: 28px;
+                    font-weight: bold;
+                ">
+                    <!-- Subject -->
+                    <div style="display: flex; align-items: baseline;">
+                        <span style="width: 180px; flex-shrink: 0;">المادة:</span>
+                        <div style="flex: 1; border-bottom: 2px dotted #000; height: 10px;"></div>
+                    </div>
+
+                    <!-- Grade -->
+                    <div style="display: flex; align-items: baseline;">
+                        <span style="width: 180px; flex-shrink: 0;">الصف:</span>
+                        <div style="flex: 1; border-bottom: 2px dotted #000; height: 10px;"></div>
+                    </div>
+
+                    <!-- Count -->
+                    <div style="display: flex; align-items: baseline;">
+                        <span style="width: 180px; flex-shrink: 0;">عدد الطلاب:</span>
+                        <div style="flex: 1; border-bottom: 2px dotted #000; height: 10px;"></div>
+                    </div>
+                </div>
+
+                <!-- Footer / Spacer -->
+                <div style="flex: 1;"></div>
+
+                 <div style="width: 100%; text-align: center; margin-top: 20px; font-size: 14px; color: #666;">
+                    ${settings.schoolName} - لجنة الاختبارات والتحكم
+                </div>
+            </div>
         </div>
     </div>
     `;
@@ -500,37 +695,71 @@ export const printAnswerPaperReceipt = (data: AppData, settings: PrintSettings, 
     const fTotal = getField(config, 'col_total', 'أظرف الإجابة');
     const fNotes = getField(config, 'col_notes', 'توقيع المستلم');
 
+    // --- NEW: Compact Header (Embedded) ---
+    // This saves about 40-50px of vertical space compared to standard header
+    const compactHeader = `
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #000; padding-bottom: 5px; margin-bottom: 5px;">
+        <div style="text-align: right; width: 30%; font-size: 10px;">
+            <div style="font-weight: bold;">${settings.adminName}</div>
+            <div style="font-weight: bold;">${settings.schoolName}</div>
+            <div>لجنة الاختبارات والتحكم</div>
+        </div>
+        <div style="text-align: center; width: 40%;">
+             ${settings.logoUrl ? `<img src="${settings.logoUrl}" style="height: 40px; object-fit: contain;" />` : ''}
+        </div>
+        <div style="text-align: left; width: 30%; font-size: 10px;">
+            <div style="font-weight: bold;">${data.school.term}</div>
+            <div style="font-weight: bold;">${data.school.year}</div>
+        </div>
+    </div>
+    `;
+
+    const committeesCount = data.committees.length;
+    
+    // Auto-Fit Calculation
+    // We aim for single page (around 20-25 committees), but allow overflow.
+    // Base available height for content ~900px
+    const availableHeight = 950; 
+    let rowHeight = Math.floor(availableHeight / (committeesCount + 1)); // +1 for header row
+    
+    // Clamp Row Height: 
+    // Min 35px: To ensure readability ( حسن الورقة ).
+    // Max 50px: Don't let it look too sparse if few committees.
+    rowHeight = Math.max(35, Math.min(50, rowHeight));
+    
+    // Scale Font based on row height
+    let fontSize = Math.floor(rowHeight * 0.35);
+    fontSize = Math.max(11, Math.min(13, fontSize));
+
     let rows = '';
     data.committees.forEach(c => {
          const activeStages = data.stages.filter(s => (c.counts[s.id] || 0) > 0);
          
-         const rowHeight = 35; // Increased height for easier writing
-         
-         // 1. Student Count Breakdown (Only Stages, NO TOTAL)
+         // Inner Content: Use flex to distribute grade lines evenly in the available row height
          const countDetails = activeStages.map((s, i) => {
-            const borderStyle = i === activeStages.length - 1 ? '' : 'border-bottom: 1px solid #000;';
+            const borderStyle = i === activeStages.length - 1 ? '' : 'border-bottom: 1px solid #ccc;';
             return `
-            <div style="height:${rowHeight}px; ${borderStyle} display:flex; align-items:center; justify-content:space-between; padding:0 8px; font-size:12px;">
+            <div style="flex: 1; ${borderStyle} display:flex; align-items:center; justify-content:space-between; padding:0 4px; font-size:${fontSize - 1}px;">
                 <span style="font-weight:bold;">${s.name}</span>
-                <span style="font-weight:bold; font-size: 14px;">${c.counts[s.id]}</span>
+                <span style="font-weight:bold;">${c.counts[s.id]}</span>
             </div>`;
          }).join('');
 
-         // 2. Present/Absent Empty Rows (Matches count details height)
+         // Empty Rows for manual input
          const emptyRows = activeStages.map((_, i) => {
-            const borderStyle = i === activeStages.length - 1 ? '' : 'border-bottom: 1px solid #000;';
-            return `<div style="height:${rowHeight}px; ${borderStyle}"></div>`;
+            const borderStyle = i === activeStages.length - 1 ? '' : 'border-bottom: 1px solid #ccc;';
+            return `<div style="flex: 1; ${borderStyle}"></div>`;
          }).join('');
 
          rows += `
-            <tr>
-                ${fComm.visible ? `<td style="font-weight:bold; font-size: 18px; vertical-align: middle; padding: 10px;">${c.name}</td>` : ''}
+            <tr style="height: ${rowHeight}px;">
+                ${fComm.visible ? `<td style="font-weight:bold; font-size: ${fontSize + 1}px; vertical-align: middle; padding: 0;">${c.name}</td>` : ''}
                 
-                ${fApps.visible ? `<td style="padding: 0; vertical-align: top;">${countDetails}</td>` : ''}
+                ${fApps.visible ? `<td style="padding: 0; height: ${rowHeight}px;"><div style="height: 100%; display: flex; flex-direction: column;">${countDetails}</div></td>` : ''}
                 
-                ${fPres.visible ? `<td style="padding: 0; vertical-align: top;">${emptyRows}</td>` : ''}
+                ${fPres.visible ? `<td style="padding: 0; height: ${rowHeight}px;"><div style="height: 100%; display: flex; flex-direction: column;">${emptyRows}</div></td>` : ''}
                 
-                ${fAbs.visible ? `<td style="padding: 0; vertical-align: top;">${emptyRows}</td>` : ''}
+                ${fAbs.visible ? `<td style="padding: 0; height: ${rowHeight}px;"><div style="height: 100%; display: flex; flex-direction: column;">${emptyRows}</div></td>` : ''}
                 
                 ${fTotal.visible ? `<td style="vertical-align: middle;"></td>` : ''}
                 
@@ -539,24 +768,28 @@ export const printAnswerPaperReceipt = (data: AppData, settings: PrintSettings, 
          `;
     });
 
+    // We removed 'page-break' class from the container div and rely on standard print flow.
+    // If it exceeds one page, the table will naturally break, and the <thead> will repeat.
     const content = `
-    <div style="padding: 20px;">
-        ${getHeaderHTML(data.school, settings)}
-        <h2 style="text-align: center; margin-bottom: 20px;">${config?.title || 'كشف استلام أوراق الإجابة من اللجان'}</h2>
-        <table style="border: 2px solid #000;">
+    <div style="display: flex; flex-direction: column; padding: 0px;">
+        ${compactHeader}
+        <h2 style="text-align: center; margin: 5px 0 10px 0; font-size: 16px; font-weight:bold;">${config?.title || 'كشف استلام أوراق الإجابة من اللجان'}</h2>
+        
+        <table style="border: 2px solid #000; width: 100%;">
             <thead>
-                <tr style="height: 45px; background-color: #f3f4f6; border-bottom: 2px solid #000;">
-                    ${fComm.visible ? `<th style="width: 10%; border: 1px solid #000;">${fComm.label}</th>` : ''}
-                    ${fApps.visible ? `<th style="width: 25%; border: 1px solid #000;">${fApps.label}</th>` : ''}
-                    ${fPres.visible ? `<th style="width: 15%; border: 1px solid #000;">${fPres.label}</th>` : ''}
-                    ${fAbs.visible ? `<th style="width: 15%; border: 1px solid #000;">${fAbs.label}</th>` : ''}
-                    ${fTotal.visible ? `<th style="width: 15%; border: 1px solid #000;">${fTotal.label}</th>` : ''}
-                    ${fNotes.visible ? `<th style="width: 20%; border: 1px solid #000;">${fNotes.label}</th>` : ''}
+                <tr style="height: 35px; background-color: #f3f4f6; border-bottom: 2px solid #000;">
+                    ${fComm.visible ? `<th style="width: 8%; border: 1px solid #000; font-size: 11px;">${fComm.label}</th>` : ''}
+                    ${fApps.visible ? `<th style="width: 28%; border: 1px solid #000; font-size: 11px;">${fApps.label}</th>` : ''}
+                    ${fPres.visible ? `<th style="width: 14%; border: 1px solid #000; font-size: 11px;">${fPres.label}</th>` : ''}
+                    ${fAbs.visible ? `<th style="width: 14%; border: 1px solid #000; font-size: 11px;">${fAbs.label}</th>` : ''}
+                    ${fTotal.visible ? `<th style="width: 14%; border: 1px solid #000; font-size: 11px;">${fTotal.label}</th>` : ''}
+                    ${fNotes.visible ? `<th style="width: 22%; border: 1px solid #000; font-size: 11px;">${fNotes.label}</th>` : ''}
                 </tr>
             </thead>
             <tbody>${rows}</tbody>
         </table>
-        <div style="margin-top: 40px; display: flex; justify-content: space-between; padding: 0 40px;">
+
+        <div style="margin-top: 15px; display: flex; justify-content: space-between; padding: 0 40px; font-size: 12px; page-break-inside: avoid;">
              <div style="text-align:center; font-weight:bold;">
                   عضو الكنترول: ........................................... التوقيع: .....................
              </div>

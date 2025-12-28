@@ -19,7 +19,8 @@ import {
   printDistributionByGrade,
   printViolationMinutes,
   printSubCommitteeTasks,
-  printSubstituteInvigilatorRecord
+  printSubstituteInvigilatorRecord,
+  printAnswerSubmissionList
 } from '../services/printService';
 import { Printer, Settings, Eye, EyeOff, Edit3, X, Users, ClipboardList, UserX, MailOpen, FolderOpen, FileCheck, FileStack, BookOpen, AlertCircle, List, UserMinus, ShieldAlert, FileText, LayoutList, PenTool, Search, User, Calendar, Book, Clock, UserCheck } from 'lucide-react';
 
@@ -59,6 +60,9 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
   // Student Selection State
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [studentSearchTerm, setStudentSearchTerm] = useState('');
+
+  // Committee Selection for Stickers
+  const [selectedCommitteeId, setSelectedCommitteeId] = useState<string>('');
 
   // Exam Details State (Subject, Date, etc.)
   const [examDetails, setExamDetails] = useState({
@@ -170,6 +174,9 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
     
     // Reset Substitute Data
     setSubstituteData({ reserveTeacher: '', originalTeacher: '', committeeId: '', reason: '' });
+    
+    // Reset Committee Selection
+    setSelectedCommitteeId('');
   };
 
   const toggleFieldVisibility = (key: string) => {
@@ -220,6 +227,9 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
       case 'substitute_invigilator': printSubstituteInvigilatorRecord(data, settings, activeReport, examDetails, substituteData); break;
       case 'question_envelope': printQuestionEnvelope(data, settings, activeReport); break;
       case 'answer_envelope': printAnswerEnvelope(data, settings, activeReport); break;
+      
+      // NEW REPORT
+      case 'answer_submission_list': printAnswerSubmissionList(data, settings, activeReport, examDetails); break;
 
       // Group 5 (Students Specific)
       case 'absence_daily': printAbsenceRecord(data, settings, activeReport, selectedStudentData, examDetails); break; 
@@ -227,7 +237,7 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
       case 'violation_minutes': printViolationMinutes(data, settings, activeReport, selectedStudentData, examDetails); break;
 
       // Stickers
-      case 'seat_labels': printSeatLabels(data, settings); break;
+      case 'seat_labels': printSeatLabels(data, settings, selectedCommitteeId); break;
     }
   };
 
@@ -258,7 +268,7 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
   };
 
   const needsStudentSelect = activeReport && ['absence_daily', 'violation_minutes', 'student_late'].includes(activeReport.id);
-  const needsExamDetails = activeReport && ['absence_daily', 'violation_minutes', 'question_envelope_opening', 'student_late', 'substitute_invigilator'].includes(activeReport.id);
+  const needsExamDetails = activeReport && ['absence_daily', 'violation_minutes', 'question_envelope_opening', 'student_late', 'substitute_invigilator', 'answer_submission_list'].includes(activeReport.id);
   const isLateReport = activeReport?.id === 'student_late';
   const isSubstituteReport = activeReport?.id === 'substitute_invigilator';
 
@@ -283,6 +293,29 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
                 <label className="block text-sm font-bold text-gray-700 mb-2">عنوان التقرير</label>
                 <input type="text" value={activeReport.title} onChange={(e) => setActiveReport({...activeReport, title: e.target.value})} className={inputClass} />
               </div>
+
+              {/* Committee Selection for Stickers */}
+              {activeReport.id === 'seat_labels' && (
+                  <div className="bg-green-50/50 rounded-xl p-4 border border-green-100">
+                      <h4 className="text-sm font-bold text-green-800 mb-4 flex items-center gap-2">
+                          <List className="w-4 h-4" /> تحديد اللجنة (اختياري)
+                      </h4>
+                      <div className="flex flex-col gap-2">
+                          <label className="text-[10px] text-gray-500 font-bold">اللجنة</label>
+                          <select 
+                              value={selectedCommitteeId} 
+                              onChange={(e) => setSelectedCommitteeId(e.target.value)}
+                              className="w-full p-2 text-sm border border-green-200 rounded-lg outline-none focus:border-green-500 bg-white"
+                          >
+                              <option value="">طباعة جميع اللجان</option>
+                              {data.committees.map(c => (
+                                  <option key={c.id} value={c.id}>لجنة {c.name}</option>
+                              ))}
+                          </select>
+                          <p className="text-[10px] text-gray-400">اتركها على "طباعة جميع اللجان" لطباعة كامل المدرسة.</p>
+                      </div>
+                  </div>
+              )}
 
               {/* Manager Name Input for specific reports */}
               {(isLateReport || isSubstituteReport) && (
@@ -729,18 +762,25 @@ const PrintCenter: React.FC<PrintCenterProps> = ({ data, onUpdateSchool }) => {
            <h3 className="text-lg font-bold text-gray-700 mb-4 flex items-center gap-2"><FileStack className="w-5 h-5 text-purple-600" /> النماذج الإدارية والمحاضر</h3>
            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <ReportBtn 
-                 title="استلام أوراق الإجابة" 
+                 title="كشف استلام أوراق الإجابة" 
                  subtitle="نموذج الاستلام" 
                  icon={FileCheck} 
                  color="purple" 
-                 onClick={() => openReportConfig('answer_paper_receipt', 'كشف استلام أوراق الإجابة', [
+                 onClick={() => openReportConfig('answer_paper_receipt', 'كشف استلام أوراق الإجابة من اللجان', [
                      {key: 'col_comm', label: 'رقم اللجنة'}, 
-                     {key: 'col_applicants', label: 'عدد الطلاب'}, 
+                     {key: 'col_applicants', label: 'عدد الطلاب (تفصيل)'}, 
                      {key: 'col_present', label: 'الحاضرون'},
                      {key: 'col_absent', label: 'الغائبون'},
                      {key: 'col_total', label: 'أظرف الإجابة'},
                      {key: 'col_notes', label: 'توقيع المستلم'}
                  ])} 
+              />
+              <ReportBtn 
+                 title="كشف تسليم الورقة" 
+                 subtitle="بدون رقم جلوس" 
+                 icon={FileCheck} 
+                 color="purple" 
+                 onClick={() => openReportConfig('answer_submission_list', 'كشف استلام ورقة الإجابة', [])} 
               />
               <ReportBtn 
                  title="متابعة أوراق الإجابة" 

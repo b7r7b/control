@@ -20,6 +20,7 @@ export interface Committee {
   name: string; // Display name (e.g., "1")
   location: string;
   counts: Record<number, number>; // Maps Stage ID to count
+  invigilatorCount?: number; // New: Number of invigilators required for this committee (default 1)
 }
 
 export interface SchoolData {
@@ -33,7 +34,7 @@ export interface SchoolData {
 // --- Schedule Types ---
 export interface PeriodAssignment {
   periodId: number;
-  main: string[]; // Teacher names assigned to rooms (index matches committee index)
+  main: string[]; // Teacher names assigned to rooms (flat list based on committees needs)
   reserves: string[]; // Teacher names in reserve
 }
 
@@ -45,7 +46,8 @@ export interface DaySchedule {
 
 export interface ExamSchedule {
   days: DaySchedule[];
-  teachersPerCommittee: number;
+  // teachersPerCommittee is kept for backward compatibility but might be ignored in new logic
+  teachersPerCommittee: number; 
 }
 
 export interface Teacher {

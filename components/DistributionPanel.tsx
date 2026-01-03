@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Stage, Committee } from '../types';
-import { Plus, Trash2, Wand2, Calculator, ArrowLeftRight, CheckCircle2, Eraser, Shuffle, Layers, Split, AlertCircle, FileDown } from 'lucide-react';
+import { Plus, Trash2, Wand2, Calculator, ArrowLeftRight, CheckCircle2, Eraser, Shuffle, Layers, Split, AlertCircle, FileDown, UserCheck } from 'lucide-react';
 import { exportToExcel } from '../services/excelService';
 
 interface DistributionPanelProps {
@@ -74,7 +74,8 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
       id: Date.now(),
       name: nextName,
       location: '',
-      counts: {}
+      counts: {},
+      invigilatorCount: 1 // Default to 1
     };
     onChange([...committees, newCommittee]);
   };
@@ -147,7 +148,8 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
                     id: Date.now() + committeeCounter,
                     name: String(committeeCounter++),
                     location: '',
-                    counts
+                    counts,
+                    invigilatorCount: 1
                 });
                 
                 remaining[stage.id] -= take;
@@ -197,7 +199,8 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
                id: Date.now() + committeeCounter,
                name: String(committeeCounter++),
                location: '',
-               counts
+               counts,
+               invigilatorCount: 1
              });
            } else {
                break; // Safety
@@ -234,6 +237,7 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
                         rows.push({
                             'اللجنة': comm.name,
                             'المقر': comm.location,
+                            'عدد الملاحظين': comm.invigilatorCount || 1,
                             'اسم الطالب': st.name,
                             'رقم الجلوس': st.studentId,
                             'المرحلة': stage.name,
@@ -421,7 +425,11 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
             <thead className="bg-gray-50 text-gray-500 text-xs uppercase font-bold">
               <tr>
                 <th className="p-3 w-16 border-l bg-gray-100">رقم</th>
-                <th className="p-3 w-40 border-l bg-gray-100">المقر</th>
+                <th className="p-3 w-32 border-l bg-gray-100">المقر</th>
+                {/* Invigilator Count Header */}
+                <th className="p-3 w-24 border-l bg-orange-50 text-orange-800 flex items-center justify-center gap-1">
+                    <UserCheck className="w-3 h-3" /> ملاحظين
+                </th>
                 {stages.map(s => (
                   <th key={s.id} className="p-3 border-l min-w-[140px] text-blue-700 bg-blue-50">
                     {s.name}
@@ -456,6 +464,20 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
                         className="w-full text-center text-xs text-gray-600 bg-transparent focus:outline-none focus:bg-white focus:ring-1 focus:ring-primary rounded px-2 py-1"
                       />
                     </td>
+                    
+                    {/* Invigilator Count Input */}
+                    <td className="p-2 border-l align-top bg-orange-50/20">
+                      <select 
+                         value={committee.invigilatorCount || 1}
+                         onChange={(e) => handleUpdateCommittee(idx, 'invigilatorCount', parseInt(e.target.value))}
+                         className="w-full text-center text-xs font-bold text-orange-700 bg-transparent focus:outline-none focus:bg-white rounded py-1 cursor-pointer"
+                      >
+                          <option value="1">1</option>
+                          <option value="2">2</option>
+                          <option value="3">3</option>
+                      </select>
+                    </td>
+
                     {stages.map(s => (
                       <td key={s.id} className="p-2 border-l align-top">
                         <div className="flex flex-col gap-1">
@@ -493,7 +515,7 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
               })}
               {committees.length === 0 && (
                 <tr>
-                  <td colSpan={stages.length + 4} className="p-12 text-center text-gray-400 bg-gray-50/50">
+                  <td colSpan={stages.length + 5} className="p-12 text-center text-gray-400 bg-gray-50/50">
                     <div className="flex flex-col items-center gap-2">
                       <AlertCircle className="w-8 h-8 opacity-20" />
                       <p>لا توجد لجان حالياً.</p>
@@ -510,7 +532,7 @@ const DistributionPanel: React.FC<DistributionPanelProps> = ({ stages, committee
         
         <div className="mt-4 text-[10px] text-gray-400 flex gap-4">
              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> الأرقام أسفل كل خلية تمثل تسلسل الطلاب الأبجدي في اللجنة.</span>
-             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-secondary"></span> عند اختيار "دمج متداخل"، يتم توزيع الطلاب بالتناوب (1،1،1..) في الطباعة لمنع الغش.</span>
+             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500"></span> يمكنك تحديد عدد الملاحظين (1 أو 2) لكل لجنة بشكل مستقل.</span>
         </div>
       </div>
     </div>

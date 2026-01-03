@@ -15,7 +15,8 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
   // Changed from single number to array
   const [periodsPerDay, setPeriodsPerDay] = useState<number[]>([1, 1, 1, 1, 1]); 
   
-  const [teachersPerComm, setTeachersPerComm] = useState(1);
+  // Note: teachersPerComm is now only a "default" for bulk actions if we add them, 
+  // but logic relies on committee.invigilatorCount
   const [schedule, setSchedule] = useState<ExamSchedule | null>(data.schedule || null);
   const [activeDayIdx, setActiveDayIdx] = useState(0);
   const [startDate, setStartDate] = useState('');
@@ -65,7 +66,6 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
       if (data.schedule && data.schedule.days.length > 0) {
           setNumDays(data.schedule.days.length);
           setPeriodsPerDay(data.schedule.days.map(d => d.periods.length));
-          setTeachersPerComm(data.schedule.teachersPerCommittee || 1);
       }
   }, []);
 
@@ -95,7 +95,30 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
     return usage;
   }, [schedule, data.teachers]);
 
-  // --- Date Helper ---
+  // --- Helpers ---
+  
+  // Get the flat array index start for a specific committee
+  const getCommitteeStartIdx = (committeeIndex: number) => {
+      let idx = 0;
+      for (let i = 0; i < committeeIndex; i++) {
+          idx += (data.committees[i].invigilatorCount || 1);
+      }
+      return idx;
+  };
+
+  // Get committee index from a flat array index
+  const getCommitteeFromFlatIdx = (flatIdx: number): { committee: any, index: number } | null => {
+      let currentLimit = 0;
+      for (let i = 0; i < data.committees.length; i++) {
+          const count = data.committees[i].invigilatorCount || 1;
+          currentLimit += count;
+          if (flatIdx < currentLimit) {
+              return { committee: data.committees[i], index: i };
+          }
+      }
+      return null;
+  };
+
   const getDayLabel = (dayIndex: number) => {
       if (!startDate) {
           return { name: `اليوم ${dayIndex + 1}`, date: '', hijri: '' };
@@ -342,12 +365,15 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
       return;
     }
     
-    // Check max needs across all days (worst case)
-    const maxPeriods = Math.max(...periodsPerDay);
-    const neededPerSlot = data.committees.length * teachersPerComm;
+    // Calculate total invigilator slots needed per period
+    // Iterate over committees and sum their requirements
+    let neededPerSlot = 0;
+    data.committees.forEach(c => {
+        neededPerSlot += (c.invigilatorCount || 1);
+    });
     
     if (data.teachers.length < neededPerSlot) {
-      if (!confirm(`عدد المعلمين (${data.teachers.length}) أقل من المطلوب للفترة الواحدة (${neededPerSlot}). سيتم ترك بعض اللجان فارغة. هل تريد الاستمرار؟`)) {
+      if (!confirm(`عدد المعلمين (${data.teachers.length}) أقل من المطلوب للفترة الواحدة (${neededPerSlot}) بناءً على احتياجات اللجان. سيتم ترك بعض اللجان فارغة. هل تريد الاستمرار؟`)) {
         return;
       }
     }
@@ -372,8 +398,11 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
         const main: string[] = [];
         let tIdx = 0;
 
+        // Loop Committees
         for (let c = 0; c < data.committees.length; c++) {
-           for (let k = 0; k < teachersPerComm; k++) {
+           const count = data.committees[c].invigilatorCount || 1;
+           // Assign teachers based on count needed
+           for (let k = 0; k < count; k++) {
               if (tIdx < sortedTeachers.length) {
                 const teacher = sortedTeachers[tIdx];
                 main.push(teacher.name);
@@ -390,7 +419,7 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
       newDays.push({ dayId: d, date: '', periods });
     }
 
-    const newSchedule: ExamSchedule = { days: newDays, teachersPerCommittee: teachersPerComm };
+    const newSchedule: ExamSchedule = { days: newDays, teachersPerCommittee: 1 }; // Default 1, logic handles the rest
     setSchedule(newSchedule);
     onSave(newSchedule);
   };
@@ -440,8 +469,10 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
            // Export Main Invigilators
            period.main.forEach((teacherName, idx) => {
               if (!teacherName) return;
-              const commIdx = Math.floor(idx / schedule.teachersPerCommittee);
-              const committee = data.committees[commIdx];
+              
+              const commInfo = getCommitteeFromFlatIdx(idx);
+              const committee = commInfo ? commInfo.committee : null;
+
               rows.push({
                  'اليوم': dayLabel.name,
                  'التاريخ': dayLabel.date,
@@ -492,17 +523,17 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
         
         // Header HTML - Compacted for space
         const headerHtml = `
-            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 10px; direction: rtl; height: 60px;">
-                <div style="text-align: right; width: 30%; font-size: 10px; line-height: 1.4; font-weight: 800;">
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 10px; direction: rtl;">
+                <div style="text-align: right; width: 30%; font-size: 8px; line-height: 1.3; font-weight: bold;">
                     <div>المملكة العربية السعودية</div>
                     <div>وزارة التعليم</div>
                     <div>الإدارة العامة للتعليم بمحافظة جدة</div>
                 </div>
                 <div style="text-align: center; width: 40%; display: flex; flex-direction: column; align-items: center;">
-                    <img src="https://salogos.org/wp-content/uploads/2021/11/UntiTtled-1.png" style="height: 45px; object-fit: contain; filter: grayscale(100%) contrast(120%);" alt="Logo">
-                    <div style="font-size: 12px; font-weight: 900; margin-top: 3px;">${data.school.name}</div>
+                    <img src="https://salogos.org/wp-content/uploads/2021/11/UntiTtled-1.png" style="height: 35px; object-fit: contain; filter: grayscale(100%) contrast(120%);" alt="Logo">
+                    <div style="font-size: 12px; font-weight: 900; margin-top: 5px; text-decoration:underline;">${data.school.name}</div>
                 </div>
-                <div style="text-align: left; width: 30%; font-size: 10px; line-height: 1.4; font-weight: 800;">
+                <div style="text-align: left; width: 30%; font-size: 8px; line-height: 1.3; font-weight: bold;">
                     <div>${data.school.term}</div>
                     <div>${data.school.year}</div>
                 </div>
@@ -513,17 +544,17 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
         let pageHtml = `
             <div style="page-break-after: always; direction: rtl; font-family: 'Tajawal', sans-serif;">
                 ${headerHtml}
-                <div style="display:flex; justify-content:space-between; align-items:center; background-color: #f5f5f5; border: 1px solid #000; padding: 4px 10px; margin-bottom: 5px; font-size: 11px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; background-color: #f5f5f5; border: 1px solid #000; padding: 2px 10px; margin-bottom: 5px; font-size: 9px;">
                     <div style="font-weight: 900;">توزيع الملاحظين: ${dayInfo.name}</div>
                     <div style="font-family: 'Times New Roman'; direction:ltr; font-weight:bold;">${dayInfo.date || ''} ${dayInfo.hijri ? `/ ${dayInfo.hijri} هـ` : ''}</div>
                 </div>
 
                 <!-- Main Matrix Table -->
-                <table style="width: 100%; border-collapse: collapse; font-size: 9px; text-align: center; border: 1px solid #000;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 8px; text-align: center; border: 1px solid #000;">
                     <thead>
                         <tr style="background-color: #f0f0f0;">
-                            <th rowspan="2" style="border: 1px solid #000; padding: 2px; width: 30px;">اللجنة</th>
-                            <th rowspan="2" style="border: 1px solid #000; padding: 2px; width: 90px;">المقر</th>
+                            <th rowspan="2" style="border: 1px solid #000; padding: 2px; width: 25px;">اللجنة</th>
+                            <th rowspan="2" style="border: 1px solid #000; padding: 2px; width: 80px;">المقر</th>
         `;
         
         // Dynamic Headers for Periods
@@ -536,8 +567,8 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
         // Sub headers for each period
         day.periods.forEach(() => {
             pageHtml += `
-                <th style="border: 1px solid #000; padding: 2px;">اسم الملاحظ</th>
-                <th style="border: 1px solid #000; padding: 2px; width: 70px;">التوقيع</th>
+                <th style="border: 1px solid #000; padding: 2px; width: 120px;">اسم الملاحظ</th>
+                <th style="border: 1px solid #000; padding: 2px; width: 60px;">التوقيع</th>
             `;
         });
         
@@ -550,18 +581,42 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
                 <td style="border: 1px solid #000; padding: 1px; white-space:normal; line-height:1.2;">${comm.location}</td>
              `;
              
+             // Calculated Start Index for this Committee in the flat list
+             const startIdx = getCommitteeStartIdx(cIdx);
+             const count = comm.invigilatorCount || 1;
+
              // Loop through periods to get teachers for this committee
              day.periods.forEach((period) => {
                 const teachers = [];
-                for(let k=0; k<schedule.teachersPerCommittee; k++) {
-                    const t = period.main[(cIdx * schedule.teachersPerCommittee) + k];
+                for(let k=0; k < count; k++) {
+                    const t = period.main[startIdx + k];
                     if (t) teachers.push(t);
                 }
-                const teacherCell = teachers.length > 0 ? teachers.join(' - ') : '';
                 
+                // Nested tables for Names and Signatures to align them vertically in separate rows
+                let nameHtml = '';
+                let sigHtml = '';
+
+                if (teachers.length > 0) {
+                   nameHtml = '<table style="width:100%; border-collapse:collapse; border:none; margin:0;">';
+                   sigHtml = '<table style="width:100%; border-collapse:collapse; border:none; margin:0;">';
+
+                   teachers.forEach((t, i) => {
+                       const isLast = i === teachers.length - 1;
+                       const borderStyle = isLast ? '' : 'border-bottom: 1px solid #000;';
+                       const heightStyle = 'height: 25px;'; // Reduced to 25px for better fit
+
+                       nameHtml += `<tr><td style="border:none; ${borderStyle} ${heightStyle} padding: 1px 2px; vertical-align: middle;">${t}</td></tr>`;
+                       sigHtml += `<tr><td style="border:none; ${borderStyle} ${heightStyle}"></td></tr>`;
+                   });
+
+                   nameHtml += '</table>';
+                   sigHtml += '</table>';
+                }
+
                 pageHtml += `
-                    <td style="border: 1px solid #000; padding: 3px; font-weight: bold; font-size:9px;">${teacherCell}</td>
-                    <td style="border: 1px solid #000; padding: 1px;"></td>
+                    <td style="border: 1px solid #000; padding: 0;">${nameHtml}</td>
+                    <td style="border: 1px solid #000; padding: 0;">${sigHtml}</td>
                 `;
              });
              
@@ -570,7 +625,7 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
 
         // 2. Reserve Row (Updated for Vertical listing)
         pageHtml += `<tr style="background-color: #fffde7; border-top: 2px solid #000;">
-            <td colspan="2" style="border: 1px solid #000; padding: 5px; font-weight: 900; vertical-align:middle;">الاحتياط</td>
+            <td colspan="2" style="border: 1px solid #000; padding: 2px; font-weight: 900; vertical-align:middle;">الاحتياط</td>
         `;
         
         day.periods.forEach((period) => {
@@ -580,13 +635,13 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
                     const borderBottom = i === period.reserves.length - 1 ? '' : 'border-bottom: 1px solid #ddd;';
                     periodHtml += `
                         <tr>
-                            <td style="padding: 4px; text-align: right; ${borderBottom} font-weight:bold; font-size:9px; border-left: 1px solid #000;">${res}</td>
-                            <td style="width: 70px; ${borderBottom}"></td>
+                            <td style="padding: 2px 4px; text-align: right; ${borderBottom} font-weight:bold; font-size:8px; border-left: 1px solid #000;">${res}</td>
+                            <td style="width: 60px; ${borderBottom}"></td>
                         </tr>
                     `;
                 });
             } else {
-                 periodHtml += `<tr><td style="padding: 4px; text-align:center; border-left: 1px solid #000;">-</td><td style="width: 70px;"></td></tr>`;
+                 periodHtml += `<tr><td style="padding: 2px 4px; text-align:center; border-left: 1px solid #000;">-</td><td style="width: 60px;"></td></tr>`;
             }
             periodHtml += `</table>`;
 
@@ -601,9 +656,9 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
 
         // Footer
         pageHtml += `
-                <div style="margin-top: 20px; display: flex; justify-content: space-between; font-weight: 800; font-size: 11px; padding: 0 40px;">
+                <div style="margin-top: 20px; display: flex; justify-content: space-between; font-weight: 800; font-size: 10px; padding: 0 40px;">
                     <div style="text-align: center;">
-                        <div>وكيل الشؤون التعليمية</div>
+                        <div>وكيل شؤون الطلاب</div>
                         <div style="margin-top: 25px;">${data.school.agentName || '..........................'}</div>
                     </div>
                     <div style="text-align: center;">
@@ -627,7 +682,7 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
                         body { margin: 0; padding: 0; background-color: #fff; }
                         @media print {
                             @page { size: A4 portrait; margin: 5mm; }
-                            body { zoom: 98%; }
+                            body { zoom: 80%; }
                         }
                     </style>
                 </head>
@@ -650,8 +705,10 @@ const InvigilatorDistributionPanel: React.FC<Props> = ({ data, onSave, onUpdateT
         // Check Main
         p.main.forEach((assignedName, idx) => {
             if (assignedName === teacher.name) {
-                const commIdx = Math.floor(idx / schedule.teachersPerCommittee);
-                const committee = data.committees[commIdx];
+                // Find Committee Based on Flat Index
+                const commInfo = getCommitteeFromFlatIdx(idx);
+                const committee = commInfo ? commInfo.committee : null;
+                
                 tasks.push(`- الفترة ${pIdx + 1}: لجنة ${committee ? committee.name : '؟'} (${committee ? committee.location : ''})`);
             }
         });
@@ -984,14 +1041,10 @@ ${tasks.join('\n')}
                 <label className="block text-xs font-bold text-gray-500 mb-1">عدد الأيام</label>
                 <input type="number" min="1" max="20" value={numDays} onChange={(e) => setNumDays(Number(e.target.value))} className="w-20 rounded-lg border-gray-300 bg-gray-50 p-2 text-sm font-bold text-center" />
                 </div>
-                
-                <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">ملاحظين بكل لجنة</label>
-                <select value={teachersPerComm} onChange={(e) => setTeachersPerComm(Number(e.target.value))} className="w-24 rounded-lg border-gray-300 bg-gray-50 p-2 text-sm font-bold">
-                    <option value="1">1 ملاحظ</option>
-                    <option value="2">2 ملاحظين</option>
-                </select>
-                </div>
+                {/* 
+                  NOTE: Removed Global "Teachers Per Committee" selector.
+                  Logic now relies on individual committee settings in DistributionPanel. 
+                */}
             </div>
             {/* Start Date Input */}
             <div>
@@ -1131,31 +1184,41 @@ ${tasks.join('\n')}
                                                 <div className="flex flex-col">
                                                     <span>{comm.name}</span>
                                                     <span className="text-[9px] font-normal text-gray-400">{comm.location}</span>
+                                                    {/* Indicator for invigilators count */}
+                                                    <span className="text-[9px] text-blue-500 bg-blue-50 rounded px-1 mt-1">
+                                                        {comm.invigilatorCount || 1} ملاحظ
+                                                    </span>
                                                 </div>
                                             </td>
-                                            {schedule.days[activeDayIdx].periods.map((period, pIdx) => (
-                                                <td key={pIdx} className="p-2 border-l align-top">
-                                                    <div className="flex flex-col gap-1">
-                                                        {Array.from({length: schedule.teachersPerCommittee}).map((_, tOffset) => {
-                                                            const flatIdx = (cIdx * schedule.teachersPerCommittee) + tOffset;
-                                                            const assigned = period.main[flatIdx] || '';
-                                                            return (
-                                                                <select
-                                                                    key={tOffset}
-                                                                    value={assigned}
-                                                                    onChange={(e) => handleManualChange(activeDayIdx, pIdx, 'main', flatIdx, e.target.value)}
-                                                                    className={`w-full text-xs p-1.5 rounded border ${assigned ? 'bg-white border-gray-300' : 'bg-red-50 border-red-200'} focus:ring-1 focus:ring-primary`}
-                                                                >
-                                                                    <option value="" className="text-gray-300">-- فارغ --</option>
-                                                                    {data.teachers.map((t, i) => (
-                                                                        <option key={i} value={t.name}>{t.name}</option>
-                                                                    ))}
-                                                                </select>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </td>
-                                            ))}
+                                            {schedule.days[activeDayIdx].periods.map((period, pIdx) => {
+                                                // Get assignment slots for this committee based on count
+                                                const startIdx = getCommitteeStartIdx(cIdx);
+                                                const count = comm.invigilatorCount || 1;
+                                                
+                                                return (
+                                                    <td key={pIdx} className="p-2 border-l align-top">
+                                                        <div className="flex flex-col gap-1">
+                                                            {Array.from({length: count}).map((_, tOffset) => {
+                                                                const flatIdx = startIdx + tOffset;
+                                                                const assigned = period.main[flatIdx] || '';
+                                                                return (
+                                                                    <select
+                                                                        key={tOffset}
+                                                                        value={assigned}
+                                                                        onChange={(e) => handleManualChange(activeDayIdx, pIdx, 'main', flatIdx, e.target.value)}
+                                                                        className={`w-full text-xs p-1.5 rounded border ${assigned ? 'bg-white border-gray-300' : 'bg-red-50 border-red-200'} focus:ring-1 focus:ring-primary`}
+                                                                    >
+                                                                        <option value="" className="text-gray-300">-- فارغ --</option>
+                                                                        {data.teachers.map((t, i) => (
+                                                                            <option key={i} value={t.name}>{t.name}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </td>
+                                                );
+                                            })}
                                         </tr>
                                     ))}
                                     {/* Reserves Row */}

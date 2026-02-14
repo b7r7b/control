@@ -28,6 +28,7 @@ export const syncDataToCloud = async (localData: AppData) => {
         batch = writeBatch(db); // دفعة جديدة
         operationCounter = 0;
       }
+      
     };
 
     // ---------------------------------------------------------
@@ -151,4 +152,22 @@ export const syncDataToCloud = async (localData: AppData) => {
     console.error("Cloud Sync Error:", error);
     throw error;
   }
+  // أضف هذا الجزء قبل `await batch.commit();` في نهاية الدالة
+
+    // ---------------------------------------------------------
+    // 6. رفع جدول الاختبارات والمواد (Exam Schedule)
+    // ---------------------------------------------------------
+    if (localData.schedule) {
+        // نرفع الجدول كوثيقة واحدة في مجموعة خاصة للإعدادات
+        const scheduleRef = doc(db, 'system_config', 'exam_schedule');
+        batch.set(scheduleRef, {
+            ...localData.schedule,
+            updatedAt: new Date().toISOString()
+        });
+        
+        // نحتاج أيضاً لتحويل الجدول إلى "مظاريف اختبارات" (ExamEnvelopes) للنظام الثاني
+        // هذا يتم عادة في النظام الثاني عند "استيراد الجدول"، لكن يمكننا تجهيز البيانات هنا
+        // لتبسيط الأمر، سنكتفي برفع الجدول كـ Config، وسنقوم بتعديل النظام الثاني ليقرأ منه.
+        operationCounter++;
+    }
 };

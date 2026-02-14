@@ -1,12 +1,13 @@
-
+// تعريف هيكل الطالب
 export interface Student {
   name: string;
   studentId: string;
   grade: string;
   class: string;
-  phone?: string; // New field
+  phone?: string;
 }
 
+// تعريف المرحلة الدراسية (مثل: أول ثانوي)
 export interface Stage {
   id: number;
   name: string;
@@ -15,14 +16,16 @@ export interface Stage {
   total: number;
 }
 
+// تعريف اللجنة
 export interface Committee {
-  id: number; // Unique ID (timestamp or auto-inc)
-  name: string; // Display name (e.g., "1")
+  id: number;
+  name: string;
   location: string;
-  counts: Record<number, number>; // Maps Stage ID to count
-  invigilatorCount?: number; // New: Number of invigilators required for this committee (default 1)
+  counts: Record<number, number>; // توزيع الطلاب حسب معرف المرحلة
+  invigilatorCount?: number; // عدد الملاحظين المطلوب
 }
 
+// تعريف بيانات المدرسة
 export interface SchoolData {
   name: string;
   year: string;
@@ -31,11 +34,21 @@ export interface SchoolData {
   agentName?: string;
 }
 
-// --- Schedule Types ---
+// --- أنواع الجدول الجديد (المطور) ---
+
+// تفاصيل المادة (الاسم والوقت المستقل)
+export interface SubjectDetail {
+  name: string;
+  startTime: string;
+  endTime: string;
+}
+
 export interface PeriodAssignment {
   periodId: number;
-  main: string[]; // Teacher names assigned to rooms (flat list based on committees needs)
-  reserves: string[]; // Teacher names in reserve
+  main: string[]; // أسماء الملاحظين الأساسيين
+  reserves: string[]; // أسماء ملاحظي الاحتياط
+  // سجل يربط اسم المرحلة بتفاصيل المادة (الاسم، البداية، النهاية)
+  subjects?: Record<string, SubjectDetail>; 
 }
 
 export interface DaySchedule {
@@ -46,7 +59,6 @@ export interface DaySchedule {
 
 export interface ExamSchedule {
   days: DaySchedule[];
-  // teachersPerCommittee is kept for backward compatibility but might be ignored in new logic
   teachersPerCommittee: number; 
 }
 
@@ -55,29 +67,28 @@ export interface Teacher {
   phone: string;
 }
 
+// البيانات الرئيسية للتطبيق
 export interface AppData {
   school: SchoolData;
   stages: Stage[];
   committees: Committee[];
-  teachers: Teacher[]; // Updated from string[] to Teacher[]
+  teachers: Teacher[];
   schedule?: ExamSchedule; 
 }
 
+// إعدادات الطباعة
 export interface PrintSettings {
   adminName: string;
   schoolName: string;
-  
-  // New Fields for Signatures
   managerName: string;
   agentName: string;
-
   logoUrl: string;
   doorLabelTitle: string;
   attendanceTitle: string;
   stickerTitle: string;
   showBorder: boolean;
   
-  // Column Header Text
+  // عناوين الأعمدة
   colSequence: string;
   colSeatId: string;
   colName: string;
@@ -85,7 +96,7 @@ export interface PrintSettings {
   colPresence: string;
   colSignature: string;
 
-  // Column Visibility Flags
+  // إخفاء/إظهار الأعمدة
   showColSequence: boolean;
   showColSeatId: boolean;
   showColName: boolean;
@@ -105,21 +116,6 @@ export enum AppStep {
   DATA = 1,
   IMPORT = 2,
   DISTRIBUTE = 3,
-  TEACHERS = 4, // New Step
+  TEACHERS = 4,
   PRINT = 5
-}
-
-// --- New Types for Dynamic Reporting ---
-
-export interface ReportField {
-  key: string;
-  label: string;
-  visible: boolean;
-  type?: 'text' | 'boolean';
-}
-
-export interface DynamicReportConfig {
-  id: string;
-  title: string;
-  fields: ReportField[];
 }
